@@ -92,7 +92,7 @@ func (t *ReadFileTool) Execute(ctx context.Context, params map[string]string) (d
 			return domain.ToolResult{
 				Success: false,
 				Error:   errMsg,
-			}, fmt.Errorf(errMsg)
+			}, fmt.Errorf("%s", errMsg)
 		}
 		return domain.ToolResult{
 			Success: false,
@@ -394,12 +394,9 @@ func computeDiff(original, new string, path string) string {
 		}
 	}
 
-	// Lines only in the longer file are also "changed"
-	remainingAdded := 0
+	// Lines only in the longer file count as changed
 	remainingRemoved := 0
-	if len(newLines) > len(origLines) {
-		remainingAdded = len(newLines) - len(origLines)
-	} else if len(origLines) > len(newLines) {
+	if len(origLines) > len(newLines) {
 		remainingRemoved = len(origLines) - len(newLines)
 	}
 

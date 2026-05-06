@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/gentleman/programas/harvey/internal/domain"
 )
 
 // Default bwrap binary location.
@@ -68,8 +66,17 @@ func (s *BubblewrapSandbox) Execute(ctx context.Context, command string, args []
 		return "", err
 	}
 
-	// Step 1.5: Validate paths are within allowed paths
-	if err := s.validatePaths(allowedPaths); err != nil {
+	// Step 1.5: Validate path-like arguments are within allowed paths.
+	// Not all args are paths — filter to only check arguments that look like
+	// file system paths (start with /, ., ~, or contain /).
+	pathsToCheck := make([]string, 0, len(args)+len(allowedPaths))
+	for _, arg := range args {
+		if isPathlike(arg) {
+			pathsToCheck = append(pathsToCheck, arg)
+		}
+	}
+	pathsToCheck = append(pathsToCheck, allowedPaths...)
+	if err := s.validatePaths(pathsToCheck); err != nil {
 		return "", err
 	}
 
@@ -183,7 +190,6 @@ func (s *BubblewrapSandbox) buildBwrapArgs(allowedPaths []string) []string {
 		"--ro-bind", "/lib64", "/lib64",
 		"--ro-bind", "/etc", "/etc",
 		"--tmpfs", "/tmp",
-		"--no-network",
 		"--dev", "/dev",
 		"--proc", "/proc",
 	}
@@ -199,4 +205,30 @@ func (s *BubblewrapSandbox) buildBwrapArgs(allowedPaths []string) []string {
 	}
 
 	return args
+}
+
+// isPathlike returns true if the argument looks like a file system path.
+// This avoids flagging non-path arguments (e.g., "hello", "-la", "--color")
+// for path validation while still catching traversal attempts.
+func isPathlike(arg string) bool {
+	if len(arg) == 0 {
+		return false
+	}
+	// Absolute paths
+	if arg[0] == '/' {
+		return true
+	}
+	// Home directory paths
+	if len(arg) >= 2 && arg[0] == '~' && arg[1] == '/' {
+		return true
+	}
+	// Relative paths containing separators
+	if strings.Contains(arg, "/") {
+		return true
+	}
+	// Current/parent directory references
+	if arg == "." || arg == ".." || strings.HasPrefix(arg, "./") || strings.HasPrefix(arg, "../") {
+		return true
+	}
+	return false
 }

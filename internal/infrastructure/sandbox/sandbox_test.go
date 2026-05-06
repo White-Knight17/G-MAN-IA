@@ -215,9 +215,9 @@ func TestBubblewrap_SafeCommands(t *testing.T) {
 			contains:  "hello world",
 		},
 		{
-			name:      "ls /tmp",
+			name:      "ls allowed dir",
 			command:   "ls",
-			args:      []string{"/tmp"},
+			args:      []string{tmpDir},
 			wantError: false,
 		},
 		{

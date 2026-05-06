@@ -6,31 +6,44 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unsafe"
 
-	"github.com/gentleman/programas/harvey/internal/domain"
 	"golang.org/x/sys/unix"
 )
 
-// Landlock ABI versions.
+// Landlock filesystem access rights (from linux/landlock.h).
+// These control which file operations are permitted on allowed paths.
 const (
-	landlockABIVersion = 4 // Linux 6.7+, supports inode reparenting
+	landlockAccessFSExecute    = 1 << 0  // LANDLOCK_ACCESS_FS_EXECUTE
+	landlockAccessFSWriteFile  = 1 << 1  // LANDLOCK_ACCESS_FS_WRITE_FILE
+	landlockAccessFSReadFile   = 1 << 2  // LANDLOCK_ACCESS_FS_READ_FILE
+	landlockAccessFSReadDir    = 1 << 3  // LANDLOCK_ACCESS_FS_READ_DIR
+	landlockAccessFSRemoveDir  = 1 << 4  // LANDLOCK_ACCESS_FS_REMOVE_DIR
+	landlockAccessFSRemoveFile = 1 << 5  // LANDLOCK_ACCESS_FS_REMOVE_FILE
+	landlockAccessFSMakeChar   = 1 << 6  // LANDLOCK_ACCESS_FS_MAKE_CHAR
+	landlockAccessFSMakeDir    = 1 << 7  // LANDLOCK_ACCESS_FS_MAKE_DIR
+	landlockAccessFSMakeReg    = 1 << 8  // LANDLOCK_ACCESS_FS_MAKE_REG
+	landlockAccessFSMakeSock   = 1 << 9  // LANDLOCK_ACCESS_FS_MAKE_SOCK
+	landlockAccessFSMakeFifo   = 1 << 10 // LANDLOCK_ACCESS_FS_MAKE_FIFO
+	landlockAccessFSMakeBlock  = 1 << 11 // LANDLOCK_ACCESS_FS_MAKE_BLOCK
+	landlockAccessFSMakeSym    = 1 << 12 // LANDLOCK_ACCESS_FS_MAKE_SYM
+	landlockAccessFSRefer      = 1 << 13 // LANDLOCK_ACCESS_FS_REFER
+	landlockAccessFSTruncate   = 1 << 14 // LANDLOCK_ACCESS_FS_TRUNCATE
 )
 
 // LandlockSandbox implements domain.Sandbox using the Linux Landlock LSM.
 // It restricts the CURRENT Go process's file access to only the allowed paths.
-// Once applied via LandlockRestrictSelf(), the rules are immutable for the
+// Once applied via landlock_restrict_self(), the rules are immutable for the
 // lifetime of the process — no escalation, no bypass.
 //
 // IMPORTANT: Because Landlock is in-process, it applies to the Go process itself.
 // It should be applied at startup before any file operations on paths that may
 // not be in the allowlist. It complements Bubblewrap (subprocess isolation) by
 // hardening the tool-runner process.
-//
-// For commands that need subprocess execution, use BubblewrapSandbox instead.
-// LandlockSandbox is used for direct file operations (read_file, write_file, list_dir).
 type LandlockSandbox struct {
-	allowedPaths []string
-	enforced     bool
+	allowedPaths   []string
+	enforced       bool
+	rulesetFD      int
 }
 
 // NewLandlockSandbox creates a LandlockSandbox with the given allowed paths.
@@ -43,6 +56,7 @@ func NewLandlockSandbox(allowedPaths []string) *LandlockSandbox {
 	return &LandlockSandbox{
 		allowedPaths: resolved,
 		enforced:     false,
+		rulesetFD:    -1,
 	}
 }
 
@@ -50,69 +64,159 @@ func NewLandlockSandbox(allowedPaths []string) *LandlockSandbox {
 // After this call, the process can only access files within the allowedPaths.
 // This is a ONE-WAY operation — rules cannot be changed after enforcement.
 //
-// Returns an error if:
-//   - The kernel does not support Landlock (check /proc/config or uname -r)
-//   - The process does not have CAP_SYS_ADMIN (typically requires running as root
-//     or having the capability set on the binary)
+// Uses raw syscalls (landlock_create_ruleset, landlock_add_rule,
+// landlock_restrict_self) because golang.org/x/sys does not currently
+// provide high-level Go wrappers for the Landlock API.
 func (s *LandlockSandbox) Apply() error {
-	// Check Landlock ABI version
-	abi := unix.LandlockGetABIVersion()
-	if abi < 1 {
-		return fmt.Errorf("landlock: kernel does not support Landlock (ABI version %d, need >= 1)", abi)
+	// All allowed access rights — we need all of them to permit read/write/execute
+	// operations within the allowed paths.
+	handledAccess := uint64(
+		landlockAccessFSExecute |
+			landlockAccessFSWriteFile |
+			landlockAccessFSReadFile |
+			landlockAccessFSReadDir |
+			landlockAccessFSRemoveDir |
+			landlockAccessFSRemoveFile |
+			landlockAccessFSMakeChar |
+			landlockAccessFSMakeDir |
+			landlockAccessFSMakeReg |
+			landlockAccessFSMakeSock |
+			landlockAccessFSMakeFifo |
+			landlockAccessFSMakeBlock |
+			landlockAccessFSMakeSym |
+			landlockAccessFSRefer |
+			landlockAccessFSTruncate,
+	)
+
+	// Step 1: Create a ruleset
+	rulesetAttr := unix.LandlockRulesetAttr{
+		Access_fs: handledAccess,
 	}
 
-	// Build Landlock rules from allowed paths
-	rules, err := s.buildRules()
+	rulesetFD, err := landlockCreateRuleset(&rulesetAttr, uint32(unsafe.Sizeof(rulesetAttr)), 0)
 	if err != nil {
-		return fmt.Errorf("landlock: failed to build rules: %w", err)
+		return fmt.Errorf("landlock: create_ruleset failed: %w (kernel supports Landlock? need CONFIG_SECURITY_LANDLOCK=y)", err)
 	}
+	s.rulesetFD = rulesetFD
 
-	if len(rules) == 0 {
-		// No rules means unrestricted — apply a minimal rule to activate Landlock
-		// without restricting anything (this is unexpected but safe).
-		return nil
-	}
+	// Step 2: Add rules for each allowed path
+	for _, p := range s.allowedPaths {
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			unix.Close(rulesetFD)
+			return fmt.Errorf("landlock: cannot resolve path %q: %w", p, err)
+		}
 
-	// Submit rules to kernel
-	for _, rule := range rules {
-		if err := unix.LandlockAddRule(
-			unix.LandlockAccessFSExecute|
-				unix.LandlockAccessFSReadFile|
-				unix.LandlockAccessFSReadDir|
-				unix.LandlockAccessFSRemoveDir|
-				unix.LandlockAccessFSRemoveFile|
-				unix.LandlockAccessFSMakeChar|
-				unix.LandlockAccessFSMakeDir|
-				unix.LandlockAccessFSMakeReg|
-				unix.LandlockAccessFSMakeSock|
-				unix.LandlockAccessFSMakeFifo|
-				unix.LandlockAccessFSMakeBlock|
-				unix.LandlockAccessFSMakeSym|
-				unix.LandlockAccessFSRefer|
-				unix.LandlockAccessFSTruncate,
-			rule,
-			0,
-		); err != nil {
-			// If the kernel doesn't support some access flags, try with fewer flags
-			// as a compatibility fallback
-			if err := unix.LandlockAddRule(
-				unix.LandlockAccessFSReadFile|
-					unix.LandlockAccessFSReadDir|
-					unix.LandlockAccessFSExecute,
-				rule,
-				0,
-			); err != nil {
-				return fmt.Errorf("landlock: LandlockAddRule failed: %w", err)
+		// For Landlock, the directory must exist and we need an open fd for it.
+		info, statErr := os.Stat(abs)
+		if statErr != nil {
+			if os.IsNotExist(statErr) {
+				continue
+			}
+			unix.Close(rulesetFD)
+			return fmt.Errorf("landlock: cannot stat %q: %w", abs, statErr)
+		}
+		if !info.IsDir() {
+			continue
+		}
+
+		// Open the directory to get a file descriptor for Parent_fd.
+		dirFD, err := unix.Open(abs, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+		if err != nil {
+			unix.Close(rulesetFD)
+			return fmt.Errorf("landlock: cannot open directory %q: %w", abs, err)
+		}
+
+		pathBeneath := unix.LandlockPathBeneathAttr{
+			Allowed_access: handledAccess,
+			Parent_fd:      int32(dirFD),
+		}
+
+		addErr := landlockAddRule(rulesetFD, unix.LANDLOCK_RULE_PATH_BENEATH, &pathBeneath, 0)
+		unix.Close(dirFD) // Parent_fd is no longer needed after add_rule
+
+		if addErr != nil {
+			// Retry with minimal access flags (read-only) as a fallback
+			retryFD, retryOpenErr := unix.Open(abs, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+			if retryOpenErr != nil {
+				unix.Close(rulesetFD)
+				return fmt.Errorf("landlock: add_rule failed for %q: %w", abs, addErr)
+			}
+
+			pathBeneathRetry := unix.LandlockPathBeneathAttr{
+				Allowed_access: landlockAccessFSReadFile |
+					landlockAccessFSReadDir |
+					landlockAccessFSExecute,
+				Parent_fd: int32(retryFD),
+			}
+			retryErr := landlockAddRule(rulesetFD, unix.LANDLOCK_RULE_PATH_BENEATH, &pathBeneathRetry, 0)
+			unix.Close(retryFD)
+
+			if retryErr != nil {
+				unix.Close(rulesetFD)
+				return fmt.Errorf("landlock: add_rule failed for %q: %w (first error: %v)", abs, retryErr, addErr)
 			}
 		}
 	}
 
-	// Enforce rules — after this, the process is locked down.
-	if err := unix.LandlockRestrictSelf(); err != nil {
-		return fmt.Errorf("landlock: LandlockRestrictSelf failed: %w (process may need CAP_SYS_ADMIN or to run as root)", err)
+	// Step 3: Enforce the ruleset
+	if err := landlockRestrictSelf(rulesetFD, 0); err != nil {
+		unix.Close(rulesetFD)
+		return fmt.Errorf("landlock: restrict_self failed: %w (process may need CAP_SYS_ADMIN or to run as root)", err)
 	}
 
+	// Ruleset is now enforced; the fd is no longer needed.
+	unix.Close(rulesetFD)
+	s.rulesetFD = -1
 	s.enforced = true
+
+	return nil
+}
+
+// landlockCreateRuleset invokes the landlock_create_ruleset syscall.
+// Returns the ruleset file descriptor or an error.
+func landlockCreateRuleset(attr *unix.LandlockRulesetAttr, size uint32, flags uint32) (int, error) {
+	fd, _, errno := unix.Syscall(
+		unix.SYS_LANDLOCK_CREATE_RULESET,
+		uintptr(unsafe.Pointer(attr)),
+		uintptr(size),
+		uintptr(flags),
+	)
+	if errno != 0 {
+		return -1, fmt.Errorf("syscall landlock_create_ruleset: %w", errno)
+	}
+	return int(fd), nil
+}
+
+// landlockAddRule invokes the landlock_add_rule syscall.
+// Uses Syscall6 because it requires 4 arguments.
+func landlockAddRule(rulesetFD int, ruleType uint32, ruleAttr *unix.LandlockPathBeneathAttr, flags uint32) error {
+	_, _, errno := unix.Syscall6(
+		unix.SYS_LANDLOCK_ADD_RULE,
+		uintptr(rulesetFD),
+		uintptr(ruleType),
+		uintptr(unsafe.Pointer(ruleAttr)),
+		uintptr(flags),
+		0,
+		0,
+	)
+	if errno != 0 {
+		return fmt.Errorf("syscall landlock_add_rule: %w", errno)
+	}
+	return nil
+}
+
+// landlockRestrictSelf invokes the landlock_restrict_self syscall.
+func landlockRestrictSelf(rulesetFD int, flags uint32) error {
+	_, _, errno := unix.Syscall(
+		unix.SYS_LANDLOCK_RESTRICT_SELF,
+		uintptr(rulesetFD),
+		uintptr(flags),
+		0,
+	)
+	if errno != 0 {
+		return fmt.Errorf("syscall landlock_restrict_self: %w", errno)
+	}
 	return nil
 }
 
@@ -120,16 +224,12 @@ func (s *LandlockSandbox) Apply() error {
 // For Landlock, the actual file access enforcement is done by the kernel
 // via the Landlock rules applied in Apply(). This method provides the
 // pre-validation layer to catch obvious violations early.
-//
-// The command parameter is interpreted as the operation type (e.g., "read_file",
-// "write_file") for validation purposes. The args parameter should contain
-// file paths that will be accessed.
-//
-// For Landlock, Execute delegates actual file I/O to the caller — the kernel
-// enforces the restrictions. This method only validates path membership.
 func (s *LandlockSandbox) Execute(ctx context.Context, command string, args []string, allowedPaths []string) (string, error) {
 	// Validate paths are within allowedPaths
 	for _, raw := range append(args, allowedPaths...) {
+		if len(raw) == 0 {
+			continue
+		}
 		if err := s.validatePath(raw); err != nil {
 			return "", err
 		}
@@ -158,46 +258,6 @@ func (s *LandlockSandbox) AllowedPaths() []string {
 // IsEnforced returns whether Landlock rules have been applied.
 func (s *LandlockSandbox) IsEnforced() bool {
 	return s.enforced
-}
-
-// buildRules constructs Landlock rules that allow access to the configured paths.
-// Each path is converted to a Landlock path beneath rule (AT_FDCWD + path).
-func (s *LandlockSandbox) buildRules() ([]*unix.LandlockPathBeneathAttr, error) {
-	var rules []*unix.LandlockPathBeneathAttr
-
-	for _, p := range s.allowedPaths {
-		abs, err := filepath.Abs(p)
-		if err != nil {
-			return nil, fmt.Errorf("cannot resolve path %q: %w", p, err)
-		}
-
-		// For Landlock, we need the directory to exist to create a rule for it.
-		if _, err := os.Stat(abs); os.IsNotExist(err) {
-			// Path does not exist — skip creating a rule for it.
-			// The bubblewrap layer will handle non-existent paths at execution time.
-			continue
-		}
-
-		rules = append(rules, &unix.LandlockPathBeneathAttr{
-			AllowedAccess: unix.LandlockAccessFSReadFile |
-				unix.LandlockAccessFSReadDir |
-				unix.LandlockAccessFSExecute |
-				unix.LandlockAccessFSRemoveDir |
-				unix.LandlockAccessFSRemoveFile |
-				unix.LandlockAccessFSMakeChar |
-				unix.LandlockAccessFSMakeDir |
-				unix.LandlockAccessFSMakeReg |
-				unix.LandlockAccessFSMakeSock |
-				unix.LandlockAccessFSMakeFifo |
-				unix.LandlockAccessFSMakeBlock |
-				unix.LandlockAccessFSMakeSym |
-				unix.LandlockAccessFSRefer |
-				unix.LandlockAccessFSTruncate,
-			ParentFd: unix.AT_FDCWD,
-		})
-	}
-
-	return rules, nil
 }
 
 // validatePath resolves and validates a single path against allowed paths.
