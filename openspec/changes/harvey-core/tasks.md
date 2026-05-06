@@ -55,12 +55,12 @@ Chain strategy: feature-branch-chain
 
 ## Phase 4: Bubbletea TUI
 
-- [ ] 4.1 Create `internal/ui/tui/styles.go` — Lip Gloss theme (colors, borders, ANSI styles)
-- [ ] 4.2 Create `internal/ui/tui/views/chat.go` — ChatView: Viewport with streaming token append, scroll
-- [ ] 4.3 Create `internal/ui/tui/views/filepreview.go` — FilePreview: split pane, diff coloring, toggle
-- [ ] 4.4 Create `internal/ui/tui/views/input.go` — InputBar: Bubbles TextInput, Enter to submit
-- [ ] 4.5 Create `internal/ui/tui/views/grantmodal.go` — GrantModal: overlay with [Allow] [Deny], arrow-key navigation
-- [ ] 4.6 Create `internal/ui/tui/model.go` — Bubbletea Model: Init/Update/View, split layout, Tab/Shift+Tab focus, Ctrl+C/q quit, resize reflow
+- [x] 4.1 Create `internal/ui/tui/styles.go` — Lip Gloss theme (colors, borders, ANSI styles)
+- [x] 4.2 Create `internal/ui/tui/views/chat.go` — ChatView: Viewport with streaming token append, scroll (integrated into update.go/view.go)
+- [x] 4.3 Create `internal/ui/tui/views/filepreview.go` — FilePreview: split pane, diff coloring, toggle (integrated into view.go)
+- [x] 4.4 Create `internal/ui/tui/views/input.go` — InputBar: Bubbles TextInput, Enter to submit (integrated into model.go/view.go)
+- [x] 4.5 Create `internal/ui/tui/views/grantmodal.go` — GrantModal: overlay with [Allow] [Deny], arrow-key navigation (integrated into view.go)
+- [x] 4.6 Create `internal/ui/tui/model.go` — Bubbletea Model: Init/Update/View, split layout, Tab/Shift+Tab focus, Ctrl+C/q quit, resize reflow
 
 ## Phase 5: DI Wiring & Module Setup
 
