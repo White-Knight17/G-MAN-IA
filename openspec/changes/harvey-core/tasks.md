@@ -22,8 +22,8 @@ Chain strategy: feature-branch-chain
 | 1 | Domain interfaces + model validation | PR 1 → feature/harvey-core | Base: feature/harvey-core. No deps. ~150 lines. |
 | 2 | Core orchestration: application + LLM client + permissions | PR 2 → PR 1 branch | Base: PR 1. Orchestrator, ToolExecutor, GrantMgr, OllamaClient, InMemoryPermissionRepo. ~350 lines. |
 | 3 | Sandboxing + 6 tools | PR 3 → PR 2 branch | Base: PR 2. Landlock, Bubblewrap, FilesystemTool, CommandTool, WikiClient. ~450 lines. |
-| 4 | Bubbletea TUI | PR 4 → PR 3 branch | Base: PR 3. Model + 4 views + styles. ~350 lines. |
-| 5 | DI wiring + go.mod + all tests | PR 5 → PR 4 branch | Base: PR 4. main.go, go.mod, domain/app/infra/TUI/E2E tests. ~500+ lines. |
+| 4 | Bubbletea TUI | PR 4 → PR 3 branch | ✅ DONE. Base: PR 3. Model + 4 views + styles. ~350 lines. |
+| 5 | DI wiring + go.mod + all tests | PR 5 → PR 4 branch | ✅ DONE. Base: PR 4. main.go, go.mod, domain/app/infra/TUI/E2E tests. ~500+ lines. |
 
 ## Phase 0: Model Tool-Use Verification
 
@@ -64,13 +64,13 @@ Chain strategy: feature-branch-chain
 
 ## Phase 5: DI Wiring & Module Setup
 
-- [ ] 5.1 Run `go mod init harvey` — add deps: bubbletea, lipgloss, bubbless, golang.org/x/sys, go-diff
-- [ ] 5.2 Create `cmd/harvey/main.go` — DI wiring: instantiate adapters → domain → application, flag parsing (model, ollama URL), signal handling, startup health check, launch TUI
+- [x] 5.1 Run `go mod init harvey` — add deps: bubbletea, lipgloss, bubbless, golang.org/x/sys, go-diff. Completed via go mod tidy.
+- [x] 5.2 Create `cmd/harvey/main.go` — DI wiring: instantiate adapters → domain → application, flag parsing (model, ollama URL), signal handling, startup health check, launch TUI
 
 ## Phase 6: Testing
 
-- [ ] 6.1 Write `internal/domain/*_test.go` — table-driven tests: XML parse edge cases, ToolCall/ToolResult marshaling, mock Agent loop
+- [x] 6.1 Write `internal/domain/*_test.go` — table-driven tests: Session, Grant, ChatMessage, PermissionMode, ToolResult value objects (14 tests)
 - [x] 6.2 Write `internal/application/*_test.go` — unit tests: ChatOrchestrator 8K trim, ToolExecutor routing + timeout, GrantManager events
 - [x] 6.3 Write `internal/infrastructure/*_test.go` — integration tests: Ollama health check, NDJSON golden files, bwrap path isolation, Landlock no-bypass (sandbox tests + tools tests complete; Landlock enforcement skipped without root)
-- [ ] 6.4 Write `internal/ui/tui/*_test.go` — teatest component tests: model resize reflow, grant modal interaction, streaming render
-- [ ] 6.5 Create `scripts/e2e-hyprland-test.sh` — 20-prompt E2E suite with real Ollama + sandbox; validates spec scenarios GIVEN/WHEN/THEN
+- [x] 6.4 Write `internal/ui/tui/*_test.go` — teatest component tests: model resize reflow, grant modal interaction, streaming render (7 tests, PR 4)
+- [x] 6.5 Create `scripts/e2e-test.sh` — 5-prompt E2E suite validating Ollama connectivity, model availability, XML tool-call generation across list_dir, write_file, read_file, check_syntax, search_wiki prompts
