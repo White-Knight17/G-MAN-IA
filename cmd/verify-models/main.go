@@ -114,7 +114,7 @@ func main() {
 	}
 
 	// Summary table
-	fmt.Println("=== SUMMARY ===\n")
+	fmt.Println("=== SUMMARY ===")
 	fmt.Printf("%-16s | %-10s | %-12s | %-6s\n", "Model", "Valid/Tot", "Avg Latency", "Verdict")
 	fmt.Printf("%s-+-%s-+-%s-+-%s\n", strings.Repeat("-", 16), strings.Repeat("-", 10), strings.Repeat("-", 12), strings.Repeat("-", 6))
 	for _, r := range reports {
