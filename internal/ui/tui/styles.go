@@ -1,10 +1,10 @@
-// Package tui implements the Bubbletea terminal user interface for Harvey.
+// Package tui implements the Bubbletea terminal user interface for G-MAN.
 // It provides a split-pane chat interface with streaming LLM responses,
 // file preview panel, and grant confirmation dialog.
 //
 // Architecture: the TUI depends on domain types and a ChatOrchestrator
 // interface defined locally. It does NOT import from the application layer.
-// The concrete *application.ChatOrchestrator is injected at wiring time (cmd/harvey/main.go).
+// The concrete *application.ChatOrchestrator is injected at wiring time (cmd/gman/main.go).
 package tui
 
 import "github.com/charmbracelet/lipgloss"
@@ -21,7 +21,7 @@ type Styles struct {
 
 	// Message role styles
 	UserMsg    lipgloss.Style // "You: ..." style
-	HarveyMsg  lipgloss.Style // "Harvey: ..." style
+	GMANMsg  lipgloss.Style // "G-MAN: ..." style
 	SystemMsg  lipgloss.Style // system messages
 	ErrorMsg   lipgloss.Style // error messages
 
@@ -100,7 +100,7 @@ func DefaultStyles() Styles {
 		Foreground(accent).
 		Bold(true)
 
-	s.HarveyMsg = lipgloss.NewStyle().
+	s.GMANMsg = lipgloss.NewStyle().
 		Foreground(fg)
 
 	s.SystemMsg = lipgloss.NewStyle().

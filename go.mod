@@ -1,4 +1,4 @@
-module github.com/gentleman/programas/harvey
+module github.com/gentleman/gman
 
 go 1.26
 

@@ -124,7 +124,7 @@ func TestBubblewrap_Blocklist(t *testing.T) {
 func TestBubblewrap_PathTraversal(t *testing.T) {
 	skipIfNoBwrap(t)
 
-	tmpDir, err := os.MkdirTemp("", "harvey-bwrap-test")
+	tmpDir, err := os.MkdirTemp("", "gman-bwrap-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestBubblewrap_PathTraversal(t *testing.T) {
 func TestBubblewrap_SafeCommands(t *testing.T) {
 	skipIfNoBwrap(t)
 
-	tmpDir, err := os.MkdirTemp("", "harvey-bwrap-safe")
+	tmpDir, err := os.MkdirTemp("", "gman-bwrap-safe")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -291,7 +291,7 @@ func TestLandlock_PathValidation(t *testing.T) {
 		},
 		{
 			name:    "nested path within allowed",
-			path:    "/tmp/harvey/subdir/file",
+			path:    "/tmp/gman/subdir/file",
 			wantErr: false,
 		},
 	}

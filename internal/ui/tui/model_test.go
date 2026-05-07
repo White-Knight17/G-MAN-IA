@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/gentleman/programas/harvey/internal/domain"
-	"github.com/gentleman/programas/harvey/internal/ui/tui"
+	"github.com/gentleman/gman/internal/domain"
+	"github.com/gentleman/gman/internal/ui/tui"
 )
 
 // mockOrchestrator implements tui.ChatOrchestrator for testing.
@@ -165,10 +165,10 @@ func TestModelViewModes(t *testing.T) {
 
 	// Before any messages, view should show the title bar and input
 	view := model.View()
-	if !strings.Contains(view, "Harvey") {
-		t.Errorf("expected 'Harvey' in title bar, got:\n%s", view)
+	if !strings.Contains(view, "G-MAN") {
+		t.Errorf("expected 'G-MAN' in title bar, got:\n%s", view)
 	}
-	if !strings.Contains(view, "Ask Harvey") {
+	if !strings.Contains(view, "Ask G-MAN") {
 		t.Errorf("expected input placeholder, got:\n%s", view)
 	}
 

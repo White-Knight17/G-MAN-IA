@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gentleman/programas/harvey/internal/domain"
+	"github.com/gentleman/gman/internal/domain"
 )
 
 // textCommand maps a lightweight text-based command (e.g. "READ") to

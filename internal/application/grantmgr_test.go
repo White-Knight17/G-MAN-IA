@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/gentleman/programas/harvey/internal/application"
-	"github.com/gentleman/programas/harvey/internal/domain"
+	"github.com/gentleman/gman/internal/application"
+	"github.com/gentleman/gman/internal/domain"
 )
 
 func TestGrantManager_RequestGrant_Exists(t *testing.T) {

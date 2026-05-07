@@ -28,7 +28,7 @@ func TestChatMessageCreation(t *testing.T) {
 		{
 			name:    "system prompt",
 			role:    "system",
-			content: "You are Harvey, an Arch Linux assistant.",
+			content: "You are G-MAN, an Arch Linux assistant.",
 		},
 		{
 			name:    "tool result",

@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/gentleman/programas/harvey/internal/domain"
+	"github.com/gentleman/gman/internal/domain"
 )
 
 // ChatOrchestrator is the interface the TUI uses to send messages to
@@ -21,7 +21,7 @@ type ChatOrchestrator interface {
 	HandleMessage(ctx context.Context, session *domain.Session, userInput string) (string, error)
 }
 
-// Model is the top-level Bubbletea model for the Harvey TUI.
+// Model is the top-level Bubbletea model for the G-MAN TUI.
 // It owns all UI state: chat history, input, viewport, grant dialogs,
 // and layout dimensions.
 type Model struct {
@@ -58,7 +58,7 @@ type Model struct {
 // It initializes the text input, viewport, and a fresh Session.
 func NewModel(orchestrator ChatOrchestrator) Model {
 	ti := textinput.New()
-	ti.Placeholder = "Ask Harvey..."
+	ti.Placeholder = "Ask G-MAN..."
 	ti.CharLimit = 2000
 	ti.Focus()
 

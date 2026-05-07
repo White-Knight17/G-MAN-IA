@@ -46,8 +46,8 @@ jobs:
           go-version: "1.26"
           cache: true
 
-      - name: Build Harvey binary
-        run: go build -o harvey ./cmd/harvey
+      - name: Build G-MAN binary
+        run: go build -o gman ./cmd/gman
 
       - name: Verify binary exists
-        run: test -f harvey && file harvey
+        run: test -f gman && file gman

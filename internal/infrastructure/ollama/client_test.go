@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gentleman/programas/harvey/internal/domain"
-	"github.com/gentleman/programas/harvey/internal/infrastructure/ollama"
+	"github.com/gentleman/gman/internal/domain"
+	"github.com/gentleman/gman/internal/infrastructure/ollama"
 )
 
 // fakeTool is a minimal domain.Tool implementation for testing.
@@ -63,7 +63,7 @@ func TestOllamaClient_Run_Success(t *testing.T) {
 			"model": reqBody.Model,
 			"message": map[string]string{
 				"role":    "assistant",
-				"content": "Hello! I'm Harvey. How can I help with your config?",
+				"content": "Hello! I'm G-MAN. How can I help with your config?",
 			},
 		}
 		json.NewEncoder(w).Encode(resp)
@@ -81,8 +81,8 @@ func TestOllamaClient_Run_Success(t *testing.T) {
 	if resp == "" {
 		t.Fatal("expected non-empty response")
 	}
-	if !strings.Contains(resp, "Harvey") {
-		t.Errorf("expected response to mention Harvey, got: %q", resp)
+	if !strings.Contains(resp, "G-MAN") {
+		t.Errorf("expected response to mention G-MAN, got: %q", resp)
 	}
 }
 
@@ -220,8 +220,8 @@ func TestOllamaClient_SystemPrompt(t *testing.T) {
 	}
 
 	sysPrompt := capturedMessages[0].Content
-	if !strings.Contains(sysPrompt, "Harvey") {
-		t.Error("system prompt should mention Harvey")
+	if !strings.Contains(sysPrompt, "G-MAN") {
+		t.Error("system prompt should mention G-MAN")
 	}
 	if !strings.Contains(sysPrompt, "READ:") {
 		t.Error("system prompt should include READ: command format")

@@ -9,13 +9,13 @@ Cuando ejecutás `./gman`, se abre una interfaz de terminal con tres zonas:
 │ G-MAN — llama3.2:3b                          Ctrl+C salir │
 ├────────────────────────────────┬─────────────────────────┤
 │                                │                         │
-│  [Harvey] ¡Hola! ¿En qué te   │   ~/.config/hypr/       │
+│  [G-MAN] ¡Hola! ¿En qué te   │   ~/.config/hypr/       │
 │  ayudo hoy?                   │   hyprland.conf         │
 │                                │                         │
 │  [You] Ordename el             │   monitor=DP-1,...      │
 │  hyprland.conf                │   exec-once=waybar      │
 │                                │                         │
-│  [Harvey] Dale, voy a leerlo  │                         │
+│  [G-MAN] Dale, voy a leerlo  │                         │
 │  y te muestro qué cambios     │                         │
 │  hacer...                     │                         │
 │                                │                         │
@@ -24,7 +24,7 @@ Cuando ejecutás `./gman`, se abre una interfaz de terminal con tres zonas:
 └──────────────────────────────────────────────────────────┘
 ```
 
-- **Izquierda (70%)**: Chat. Ves tus mensajes (`[You]`) y las respuestas (`[Harvey]`).
+- **Izquierda (70%)**: Chat. Ves tus mensajes (`[You]`) y las respuestas (`[G-MAN]`).
 - **Derecha (30%)**: Preview. Muestra el contenido del último archivo que G-MAN leyó o escribió.
 - **Abajo**: Barra de input. Escribí tu pregunta y apretá Enter.
 
@@ -69,17 +69,17 @@ Apretá `Y` para autorizar o `N` para rechazar. Los permisos duran hasta que cer
 ```
 You: Tengo dos monitores, DP-1 y HDMI-A-1. Configuralos en hyprland.
 
-Harvey: Voy a leer tu config actual primero.
+G-MAN: Voy a leer tu config actual primero.
 > READ: ~/.config/hypr/hyprland.conf
 
 [Preview muestra el archivo actual]
 
-Harvey: Veo que tenés solo un monitor. Voy a agregar el segundo.
+G-MAN: Veo que tenés solo un monitor. Voy a agregar el segundo.
 ¿Me permitís escribir en ~/.config/hypr/?
 
 [Diálogo de permisos — apretás Y]
 
-Harvey: Listo. Agregué ambos monitores con sus resoluciones.
+G-MAN: Listo. Agregué ambos monitores con sus resoluciones.
 El backup quedó en hyprland.conf.bak por si querés volver atrás.
 ```
 
@@ -88,12 +88,12 @@ El backup quedó en hyprland.conf.bak por si querés volver atrás.
 ```
 You: Cómo instalo waybar?
 
-Harvey: Busco en la wiki...
+G-MAN: Busco en la wiki...
 > SEARCH: waybar install
 
-[Busca en ~/.config/harvey/knowledge/*.md]
+[Busca en ~/.config/gman/knowledge/*.md]
 
-Harvey: Encontré esto en waybar.md:
+G-MAN: Encontré esto en waybar.md:
 waybar se instala con: sudo pacman -S waybar
 Se configura en ~/.config/waybar/config.jsonc
 ```
@@ -112,6 +112,6 @@ CHECK: waybar
 }
 END
 
-Harvey: Lo revisé. La sintaxis JSON es válida.
+G-MAN: Lo revisé. La sintaxis JSON es válida.
 Todo parece correcto.
 ```

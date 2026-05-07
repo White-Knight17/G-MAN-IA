@@ -2,7 +2,7 @@ package tui
 
 import "github.com/charmbracelet/bubbles/key"
 
-// KeyMap defines the keyboard bindings for the Harvey TUI.
+// KeyMap defines the keyboard bindings for the G-MAN TUI.
 // Keys adapt based on context (e.g., y/n only work in grant dialog).
 type KeyMap struct {
 	Send          key.Binding

@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/gentleman/programas/harvey/internal/domain"
+	"github.com/gentleman/gman/internal/domain"
 )
 
 // Update processes incoming messages and returns the updated model
@@ -273,7 +273,7 @@ func (m *Model) roleDisplay(role string) string {
 	case "user":
 		return "[You]"
 	case "assistant":
-		return "[Harvey]"
+		return "[G-MAN]"
 	case "system":
 		return "[System]"
 	case "tool":
@@ -289,11 +289,11 @@ func (m *Model) roleStyle(role string) lipgloss.Style {
 	case "user":
 		return m.styles.UserMsg
 	case "assistant":
-		return m.styles.HarveyMsg
+		return m.styles.GMANMsg
 	case "system":
 		return m.styles.SystemMsg
 	default:
-		return m.styles.HarveyMsg
+		return m.styles.GMANMsg
 	}
 }
 

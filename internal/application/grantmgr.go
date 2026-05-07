@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gentleman/programas/harvey/internal/domain"
+	"github.com/gentleman/gman/internal/domain"
 )
 
 // GrantManager orchestrates the grant lifecycle for tool executions.

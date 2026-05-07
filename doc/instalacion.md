@@ -29,7 +29,7 @@ ollama list
 ```bash
 git clone https://github.com/gentleman/gman.git
 cd gman
-go build -o gman ./cmd/harvey
+go build -o gman ./cmd/gman
 ```
 
 ## 4. Ejecutar

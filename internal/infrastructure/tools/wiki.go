@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gentleman/programas/harvey/internal/domain"
+	"github.com/gentleman/gman/internal/domain"
 )
 
 // Default knowledge base directory for search_wiki.
-const knowledgeDir = ".config/harvey/knowledge"
+const knowledgeDir = ".config/gman/knowledge"
 
 // CheckSyntaxTool validates configuration file syntax for supported filetypes.
 // Supported: hyprland (brace pairing + known key names), waybar (JSON validity),
@@ -212,7 +212,7 @@ func (t *CheckSyntaxTool) checkWaybar(content string) domain.ToolResult {
 // checkBash validates bash script syntax using bash -n (no execution mode).
 func (t *CheckSyntaxTool) checkBash(content string) domain.ToolResult {
 	// Write content to a temp file for bash -n validation
-	tmpFile, err := os.CreateTemp("", "harvey-bash-check-*.sh")
+	tmpFile, err := os.CreateTemp("", "gman-bash-check-*.sh")
 	if err != nil {
 		return domain.ToolResult{
 			Success: false,
@@ -251,7 +251,7 @@ func (t *CheckSyntaxTool) checkBash(content string) domain.ToolResult {
 }
 
 // SearchWikiTool searches local markdown files in the user's knowledge base
-// directory (~/.config/harvey/knowledge/) for the given query.
+// directory (~/.config/gman/knowledge/) for the given query.
 // Uses simple text search (case-insensitive substring matching) across .md files.
 //
 // Schema XML:
@@ -274,7 +274,7 @@ func (t *SearchWikiTool) Name() string { return "search_wiki" }
 
 // Description returns a human-readable tool description for the LLM prompt.
 func (t *SearchWikiTool) Description() string {
-	return "Searches local markdown knowledge base files (~/.config/harvey/knowledge/) for information. Use this to look up Arch Wiki documentation, Hyprland tips, or other saved knowledge."
+	return "Searches local markdown knowledge base files (~/.config/gman/knowledge/) for information. Use this to look up Arch Wiki documentation, Hyprland tips, or other saved knowledge."
 }
 
 // SchemaXML returns the XML schema the LLM must follow when calling this tool.

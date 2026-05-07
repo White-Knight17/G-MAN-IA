@@ -3,7 +3,7 @@
 G-MAN sigue Clean Architecture con cuatro capas. Las dependencias apuntan hacia adentro — las capas externas nunca son importadas por las internas.
 
 ```
-cmd/harvey/main.go          ← Composición root (DI)
+cmd/gman/main.go          ← Composición root (DI)
     │
     ├── internal/domain/     ← Entidades, value objects, interfaces
     │   ├── agent.go         │   Agent interface (ReAct loop)

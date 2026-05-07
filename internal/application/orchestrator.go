@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gentleman/programas/harvey/internal/domain"
+	"github.com/gentleman/gman/internal/domain"
 )
 
 // Default configuration for the ChatOrchestrator.

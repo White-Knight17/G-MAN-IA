@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gentleman/programas/harvey/internal/domain"
+	"github.com/gentleman/gman/internal/domain"
 )
 
 // Default parameters for the Ollama client.
@@ -177,7 +177,7 @@ func (c *OllamaClient) buildMessages(input string, session *domain.Session) []ol
 func (c *OllamaClient) buildSystemPrompt() string {
 	var sb strings.Builder
 
-	sb.WriteString("You are Harvey, a friendly Linux assistant for Arch Linux + Hyprland users.\n")
+	sb.WriteString("You are G-MAN, a friendly Linux assistant for Arch Linux + Hyprland users.\n")
 	sb.WriteString("You help configure dotfiles, explain settings, and run safe commands.\n\n")
 
 	if len(c.tools) > 0 {

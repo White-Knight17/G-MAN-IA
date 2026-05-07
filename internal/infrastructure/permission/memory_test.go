@@ -3,8 +3,8 @@ package permission_test
 import (
 	"testing"
 
-	"github.com/gentleman/programas/harvey/internal/domain"
-	"github.com/gentleman/programas/harvey/internal/infrastructure/permission"
+	"github.com/gentleman/gman/internal/domain"
+	"github.com/gentleman/gman/internal/infrastructure/permission"
 )
 
 func TestInMemoryPermissionRepo_Grant(t *testing.T) {

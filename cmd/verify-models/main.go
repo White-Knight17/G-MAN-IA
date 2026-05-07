@@ -86,7 +86,7 @@ func main() {
 	modelList := strings.Split(models, ",")
 
 	fmt.Println(strings.Repeat("=", 60))
-	fmt.Println("  Harvey Model Tool-Use Verification v2")
+	fmt.Println("  G-MAN Model Tool-Use Verification v2")
 	fmt.Println(strings.Repeat("=", 60))
 	fmt.Printf("  Models: %s\n", strings.Join(modelList, ", "))
 	fmt.Printf("  Prompts/model: %d, Timeout: %ds, Threshold: >=70%%\n\n", len(prompts), timeout)

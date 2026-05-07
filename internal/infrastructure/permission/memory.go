@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/gentleman/programas/harvey/internal/domain"
+	"github.com/gentleman/gman/internal/domain"
 )
 
 // InMemoryPermissionRepo implements domain.PermissionRepository using

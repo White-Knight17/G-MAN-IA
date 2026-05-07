@@ -1,10 +1,10 @@
-// Package main is the entry point for Harvey, an AI-powered assistant for
+// Package main is the entry point for G-MAN, an AI-powered assistant for
 // Arch Linux + Hyprland. It wires together domain interfaces, application
 // use cases, and infrastructure adapters, then launches the Bubbletea TUI.
 //
 // Architecture (Clean/Hexagonal):
 //
-//	cmd/harvey/main.go  ← composition root
+//	cmd/gman/main.go  ← composition root
 //	      │
 //	      ├──► infrastructure adapters (ollama, sandbox, tools, permission)
 //	      │
@@ -30,18 +30,18 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/gentleman/programas/harvey/internal/application"
-	"github.com/gentleman/programas/harvey/internal/domain"
-	"github.com/gentleman/programas/harvey/internal/infrastructure/ollama"
-	"github.com/gentleman/programas/harvey/internal/infrastructure/permission"
-	"github.com/gentleman/programas/harvey/internal/infrastructure/sandbox"
-	"github.com/gentleman/programas/harvey/internal/infrastructure/tools"
-	"github.com/gentleman/programas/harvey/internal/ui/tui"
+	"github.com/gentleman/gman/internal/application"
+	"github.com/gentleman/gman/internal/domain"
+	"github.com/gentleman/gman/internal/infrastructure/ollama"
+	"github.com/gentleman/gman/internal/infrastructure/permission"
+	"github.com/gentleman/gman/internal/infrastructure/sandbox"
+	"github.com/gentleman/gman/internal/infrastructure/tools"
+	"github.com/gentleman/gman/internal/ui/tui"
 )
 
 func main() {
 	if err := run(); err != nil {
-		log.Fatalf("Harvey crashed: %v", err)
+		log.Fatalf("G-MAN crashed: %v", err)
 	}
 }
 
@@ -216,7 +216,7 @@ func parseAllowedDirs(raw string) ([]string, error) {
 // printBanner prints a startup banner showing model and allowed directories.
 func printBanner(model string, dirs []string) {
 	fmt.Println("╔══════════════════════════════════════════╗")
-	fmt.Println("║        Harvey — Arch AI Assistant        ║")
+	fmt.Println("║        G-MAN — Arch AI Assistant        ║")
 	fmt.Println("╠══════════════════════════════════════════╣")
 	fmt.Printf("║  Model:   %-30s ║\n", model)
 	for i, d := range dirs {

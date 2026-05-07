@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Harvey E2E Test Script
+# G-MAN E2E Test Script
 # ==============================================================================
 # Validates the full system end-to-end:
 #   - Ollama connectivity and model availability
@@ -22,7 +22,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 OLLAMA_URL="${1:-http://localhost:11434}"
 MODEL="${2:-llama3.2:3b}"
-TEST_FILE="$HOME/.config/harvey-e2e-test.conf"
+TEST_FILE="$HOME/.config/gman-e2e-test.conf"
 PASS=0
 FAIL=0
 TOTAL=0
@@ -54,7 +54,7 @@ fail_test() {
 # ---------------------------------------------------------------------------
 send_prompt() {
     local prompt="$1"
-    local system_prompt="You are Harvey, an Arch Linux assistant for Arch Linux + Hyprland users. When you need to perform an action, use these commands on their own line: READ: /path/to/file — read a file; WRITE: /path/to/file — write new content (content on next lines, end with END); LIST: /path/to/dir — list directory; RUN: command — run a safe command; CHECK: filetype — check config syntax (content on next lines, end with END); SEARCH: query — search wiki. Use absolute paths under /home. Never use RUN for dangerous commands (rm, sudo)."
+    local system_prompt="You are G-MAN, an Arch Linux assistant for Arch Linux + Hyprland users. When you need to perform an action, use these commands on their own line: READ: /path/to/file — read a file; WRITE: /path/to/file — write new content (content on next lines, end with END); LIST: /path/to/dir — list directory; RUN: command — run a safe command; CHECK: filetype — check config syntax (content on next lines, end with END); SEARCH: query — search wiki. Use absolute paths under /home. Never use RUN for dangerous commands (rm, sudo)."
 
     curl -s "${OLLAMA_URL}/api/chat" \
         -d "{
@@ -72,7 +72,7 @@ send_prompt() {
 # ---------------------------------------------------------------------------
 echo ""
 echo -e "${CYAN}╔══════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║        Harvey E2E Test Suite                     ║${NC}"
+echo -e "${CYAN}║        G-MAN E2E Test Suite                     ║${NC}"
 echo -e "${CYAN}╠══════════════════════════════════════════════════╣${NC}"
 echo -e "${CYAN}║  Ollama URL: ${OLLAMA_URL}                     ${NC}"
 echo -e "${CYAN}║  Model:      ${MODEL}                     ${NC}"
@@ -139,8 +139,8 @@ fi
 # ---------------------------------------------------------------------------
 # Test 2: Create a test file
 # ---------------------------------------------------------------------------
-echo -e "${YELLOW}[TEST 2/5]${NC} Create a file called harvey-e2e-test.conf in ~/.config with content 'name=test'"
-RESPONSE=$(send_prompt "Create a file called harvey-e2e-test.conf in ~/.config with content 'name=test'")
+echo -e "${YELLOW}[TEST 2/5]${NC} Create a file called gman-e2e-test.conf in ~/.config with content 'name=test'"
+RESPONSE=$(send_prompt "Create a file called gman-e2e-test.conf in ~/.config with content 'name=test'")
 
 if [ -n "$RESPONSE" ]; then
     if echo "$RESPONSE" | grep -qiE "(READ:|WRITE:|LIST:|RUN:|CHECK:|SEARCH:)"; then
@@ -164,8 +164,8 @@ echo "name=test" > "$TEST_FILE"
 # ---------------------------------------------------------------------------
 # Test 3: Read the test file
 # ---------------------------------------------------------------------------
-echo -e "${YELLOW}[TEST 3/5]${NC} Read the file ~/.config/harvey-e2e-test.conf"
-RESPONSE=$(send_prompt "Read the file ~/.config/harvey-e2e-test.conf")
+echo -e "${YELLOW}[TEST 3/5]${NC} Read the file ~/.config/gman-e2e-test.conf"
+RESPONSE=$(send_prompt "Read the file ~/.config/gman-e2e-test.conf")
 
 if [ -n "$RESPONSE" ]; then
     if echo "$RESPONSE" | grep -qiE "(READ:|WRITE:|LIST:|RUN:|CHECK:|SEARCH:)"; then

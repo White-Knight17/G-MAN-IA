@@ -80,7 +80,7 @@ END
 
 ## SEARCH — Buscar en wiki
 
-Busca en archivos `.md` dentro de `~/.config/harvey/knowledge/`.
+Busca en archivos `.md` dentro de `~/.config/gman/knowledge/`.
 
 ```
 SEARCH: waybar config

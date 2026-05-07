@@ -1,4 +1,4 @@
-// Package domain defines the core interfaces and value objects for Harvey.
+// Package domain defines the core interfaces and value objects for G-MAN.
 // These interfaces form the domain layer in a Clean Architecture, with
 // zero dependencies on infrastructure, UI, or external libraries.
 //

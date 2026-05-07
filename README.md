@@ -15,7 +15,7 @@ ollama pull llama3.2:3b
 # 2. Cloná y ejecutá
 git clone https://github.com/gentleman/gman.git
 cd gman
-go run ./cmd/harvey
+go run ./cmd/gman
 ```
 
 Listo. Se abre la TUI. Escribí lo que necesités.
@@ -68,7 +68,7 @@ El binario compilado pesa ~15 MB. Sin Python, sin Node, sin dependencias externa
 ## Opciones
 
 ```bash
-go run ./cmd/harvey \
+go run ./cmd/gman \
   --model llama3.2:3b \
   --ollama-url http://localhost:11434 \
   --allowed-dirs ~/.config,~/.local
@@ -78,10 +78,10 @@ go run ./cmd/harvey \
 
 ## Base de conocimiento
 
-G-MAN busca en archivos `.md` dentro de `~/.config/harvey/knowledge/`. Creá los tuyos:
+G-MAN busca en archivos `.md` dentro de `~/.config/gman/knowledge/`. Creá los tuyos:
 
 ```
-~/.config/harvey/knowledge/
+~/.config/gman/knowledge/
 ├── hyprland.md      ← Cómo configurar monitores, workspaces, atajos
 ├── waybar.md        ← Barras, widgets, estilos
 ├── arch-pacman.md   ← Pacman, AUR, tips
@@ -110,7 +110,7 @@ git clone https://github.com/gentleman/gman.git
 cd gman
 go test ./...           # 85 tests deben pasar
 go vet ./...            # sin warnings
-go build ./cmd/harvey   # binario en ./harvey
+go build ./cmd/gman   # binario en ./gman
 ```
 
 Commits en [Conventional Commits](https://www.conventionalcommits.org/). PRs requieren tests.

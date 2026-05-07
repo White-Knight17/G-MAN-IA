@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gentleman/programas/harvey/internal/application"
-	"github.com/gentleman/programas/harvey/internal/domain"
+	"github.com/gentleman/gman/internal/application"
+	"github.com/gentleman/gman/internal/domain"
 )
 
 // stubTool is a domain.Tool implementation for testing.

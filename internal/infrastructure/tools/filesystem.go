@@ -1,4 +1,4 @@
-// Package tools provides the six sandboxed dotfile tools that Harvey's
+// Package tools provides the six sandboxed dotfile tools that G-MAN's
 // LLM agent can invoke during a ReAct loop. Each tool implements domain.Tool.
 //
 // Tools:
@@ -17,7 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gentleman/programas/harvey/internal/domain"
+	"github.com/gentleman/gman/internal/domain"
 )
 
 // Common limits for filesystem tools.

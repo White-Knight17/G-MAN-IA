@@ -41,7 +41,7 @@ func (m Model) View() string {
 
 // renderTitleBar renders the top bar with app name and session info.
 func (m Model) renderTitleBar() string {
-	title := " Harvey — Arch Assistant "
+	title := " G-MAN — Arch Assistant "
 	grantCount := m.grantCount()
 
 	right := fmt.Sprintf(" Grants: %d ", grantCount)
@@ -85,7 +85,7 @@ func (m Model) renderChatViewport() string {
 }
 
 // renderPreviewPanel renders the file preview on the right side.
-// Shows content of the last file Harvey read or wrote, if available.
+// Shows content of the last file G-MAN read or wrote, if available.
 func (m Model) renderPreviewPanel() string {
 	content := m.getPreviewContent()
 	if content == "" {
@@ -145,7 +145,7 @@ func (m Model) renderGrantDialog() string {
 	}
 
 	dialogContent := fmt.Sprintf(
-		"Allow Harvey to access %s?\n\n"+
+		"Allow G-MAN to access %s?\n\n"+
 			"  Path: %s\n"+
 			"  Mode: %s\n\n"+
 			"  [Y] Allow    [N] Deny",
@@ -191,7 +191,7 @@ func (m Model) renderInputBar() string {
 	// Show thinking indicator if waiting for LLM
 	if m.thinking {
 		spinner := m.renderSpinner()
-		thinkingText := fmt.Sprintf(" %s Harvey is thinking...", spinner)
+		thinkingText := fmt.Sprintf(" %s G-MAN is thinking...", spinner)
 		return m.styles.Input.Width(m.width).Render(thinkingText)
 	}
 

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gentleman/programas/harvey/internal/domain"
+	"github.com/gentleman/gman/internal/domain"
 )
 
 // --- Test Helpers ---
@@ -601,7 +601,7 @@ func TestSearchWikiTool_NoKnowledgeBase(t *testing.T) {
 
 func TestSearchWikiTool_EmptyKnowledgeBase(t *testing.T) {
 	tmpDir := t.TempDir()
-	kbDir := filepath.Join(tmpDir, ".config", "harvey", "knowledge")
+	kbDir := filepath.Join(tmpDir, ".config", "gman", "knowledge")
 	if err := os.MkdirAll(kbDir, 0755); err != nil {
 		t.Fatalf("failed to create kb dir: %v", err)
 	}

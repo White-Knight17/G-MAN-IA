@@ -1,6 +1,6 @@
 package tui
 
-import "github.com/gentleman/programas/harvey/internal/domain"
+import "github.com/gentleman/gman/internal/domain"
 
 // Custom message types for async communication between goroutines
 // and the Bubbletea event loop. These are sent via tea.Cmd and received
