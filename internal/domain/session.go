@@ -28,7 +28,7 @@ type ChatMessage struct {
 
 	// Content is the message body.
 	// For user messages: the raw input text.
-	// For assistant messages: the LLM's response (may include <tool_call> XML).
+	// For assistant messages: the LLM's response (may include text tool commands).
 	// For tool messages: the serialized ToolResult.
 	// For system messages: the initial system prompt.
 	Content string

@@ -9,7 +9,6 @@ package application
 
 import (
 	"context"
-	"encoding/xml"
 	"fmt"
 	"strings"
 	"time"
@@ -17,11 +16,31 @@ import (
 	"github.com/gentleman/programas/harvey/internal/domain"
 )
 
-// ToolExecutor parses XML <tool_call> blocks from LLM responses, performs
+// textCommand maps a lightweight text-based command (e.g. "READ") to
+// a domain.Tool name (e.g. "read_file") and whether content follows
+// on subsequent lines (WRITE, CHECK).
+type textCommand struct {
+	toolName   string // domain tool name (e.g. "read_file")
+	hasContent bool   // whether content lines follow (ended by END)
+}
+
+// commandMap translates lightweight text commands to domain tool names.
+// Commands are matched case-insensitively. Content-bearing commands
+// (WRITE, CHECK) collect lines until an END marker is found.
+var commandMap = map[string]textCommand{
+	"READ":   {toolName: "read_file", hasContent: false},
+	"WRITE":  {toolName: "write_file", hasContent: true},
+	"LIST":   {toolName: "list_dir", hasContent: false},
+	"RUN":    {toolName: "run_command", hasContent: false},
+	"CHECK":  {toolName: "check_syntax", hasContent: true},
+	"SEARCH": {toolName: "search_wiki", hasContent: false},
+}
+
+// ToolExecutor parses text-based tool commands from LLM responses, performs
 // permission checks, and routes to the correct domain.Tool implementation.
 //
 // Responsibilities:
-//   - Parse XML tool calls (case-insensitive tool name matching)
+//   - Parse lightweight text commands (READ, WRITE, LIST, RUN, CHECK, SEARCH)
 //   - Permission validation via domain.PermissionRepository
 //   - Route to registered tool implementations
 //   - Enforce 30-second per-tool timeout
@@ -50,57 +69,87 @@ func NewToolExecutor(tools []domain.Tool, sandbox domain.Sandbox, perms domain.P
 	}
 }
 
-// toolCallXML represents the parsed structure of a <tool_call> XML block.
-// The Name element is explicit; all other child elements are captured
-// in Params and converted to a map later.
-type toolCallXML struct {
-	Name   string     `xml:"name"`
-	Params []paramXML `xml:",any"`
-}
-
-// paramXML captures any XML element inside <tool_call> other than <name>.
-// XMLName identifies the element name (e.g., "path", "cmd", "query").
-type paramXML struct {
-	XMLName xml.Name
-	Value   string `xml:",chardata"`
-}
-
-// Execute parses a <tool_call> XML string, performs permission checks,
-// and routes the call to the appropriate domain.Tool implementation.
+// Execute parses an LLM response for text-based tool commands, performs
+// permission checks, and routes the call to the appropriate domain.Tool.
 //
-// Steps:
-//   1. Parse XML to extract tool name (case-insensitive) and parameters
-//   2. Look up the tool by name
-//   3. Check permissions via domain.PermissionRepository
-//   4. Execute the tool with a 30-second timeout
-//   5. Return the ToolResult
+// The response may contain conversational text mixed with commands.
+// Commands are detected by line-starting keywords (READ:, WRITE:, etc.).
+// If no command is found, the response is returned as-is (conversational).
+//
+// For WRITE and CHECK, content is collected from subsequent lines until
+// an END marker is found on its own line.
 //
 // Errors:
-//   - Malformed XML returns an error ToolResult
 //   - Unknown tool name returns an error ToolResult
 //   - Permission denied returns an error ToolResult
 //   - Context cancellation returns the error
-func (e *ToolExecutor) Execute(ctx context.Context, session *domain.Session, toolCallXML string) (domain.ToolResult, error) {
-	// Step 1: Parse XML
-	name, params, err := e.parseToolCall(toolCallXML)
-	if err != nil {
-		return domain.ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("parse error: %v", err),
-		}, err
+func (e *ToolExecutor) Execute(ctx context.Context, session *domain.Session, response string) (domain.ToolResult, error) {
+	lines := strings.Split(response, "\n")
+
+	for i := 0; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
+		cmd, arg := parseCommand(line)
+		if cmd == "" {
+			continue
+		}
+
+		cmdUpper := strings.ToUpper(cmd)
+		cmdInfo, ok := commandMap[cmdUpper]
+		if !ok {
+			continue
+		}
+
+		// Build parameter map depending on the command type
+		params := e.buildParams(cmdUpper, arg, lines, i+1)
+
+		return e.executeDomainTool(ctx, session, cmdInfo.toolName, params)
 	}
 
-	// Step 2: Find tool (case-insensitive)
-	tool, ok := e.toolIndex[strings.ToLower(name)]
+	// No command found — treat as conversational response
+	return domain.ToolResult{Success: true, Output: response}, nil
+}
+
+// buildParams constructs the parameter map for a text command based on
+// its type. Content-bearing commands (WRITE, CHECK) collect text until END.
+func (e *ToolExecutor) buildParams(cmdUpper string, arg string, lines []string, startIdx int) map[string]string {
+	switch cmdUpper {
+	case "READ":
+		return map[string]string{"path": arg}
+	case "WRITE":
+		return map[string]string{
+			"path":    arg,
+			"content": collectContent(lines, startIdx),
+		}
+	case "LIST":
+		return map[string]string{"path": arg}
+	case "RUN":
+		return map[string]string{"command": arg}
+	case "CHECK":
+		return map[string]string{
+			"filetype": arg,
+			"content":  collectContent(lines, startIdx),
+		}
+	case "SEARCH":
+		return map[string]string{"query": arg}
+	default:
+		return map[string]string{}
+	}
+}
+
+// executeDomainTool looks up a domain tool by name, checks permissions,
+// and executes it with a 30-second timeout.
+func (e *ToolExecutor) executeDomainTool(ctx context.Context, session *domain.Session, toolName string, params map[string]string) (domain.ToolResult, error) {
+	// Find tool (case-insensitive)
+	tool, ok := e.toolIndex[strings.ToLower(toolName)]
 	if !ok {
-		err := fmt.Errorf("unknown tool: %q (available: %s)", name, e.availableToolNames())
+		err := fmt.Errorf("unknown tool: %q (available: %s)", toolName, e.availableToolNames())
 		return domain.ToolResult{
 			Success: false,
 			Error:   err.Error(),
 		}, err
 	}
 
-	// Step 3: Check permissions
+	// Check permissions
 	if !e.checkPermission(tool.Name(), params) {
 		err := fmt.Errorf("permission denied for %s", tool.Name())
 		return domain.ToolResult{
@@ -109,7 +158,7 @@ func (e *ToolExecutor) Execute(ctx context.Context, session *domain.Session, too
 		}, err
 	}
 
-	// Step 4: Execute with timeout
+	// Execute with timeout
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -124,45 +173,45 @@ func (e *ToolExecutor) Execute(ctx context.Context, session *domain.Session, too
 	return result, nil
 }
 
-// parseToolCall extracts the tool name and parameters from a <tool_call> XML string.
-// Tool name matching is case-insensitive (llama3.2:3b workaround).
-func (e *ToolExecutor) parseToolCall(xmlStr string) (string, map[string]string, error) {
-	// Trim any text before/after the XML block
-	xmlStr = strings.TrimSpace(xmlStr)
+// parseCommand extracts a command keyword and its argument from a line.
+// The line must start with a known keyword followed by ": " (colon + space).
+// Returns ("READ", "/path/to/file") for "READ: /path/to/file".
+// Returns ("", "") if the line doesn't match the command pattern.
+func parseCommand(line string) (cmd string, arg string) {
+	parts := strings.SplitN(line, ": ", 2)
+	if len(parts) != 2 {
+		return "", ""
+	}
+	cmd = strings.TrimSpace(parts[0])
+	arg = strings.TrimSpace(parts[1])
 
-	oi := strings.Index(xmlStr, "<tool_call>")
-	ci := strings.Index(xmlStr, "</tool_call>")
-	if oi == -1 || ci == -1 || oi >= ci {
-		return "", nil, fmt.Errorf("no valid <tool_call> block found")
+	// Validate it's a known command (case-insensitive)
+	if _, ok := commandMap[strings.ToUpper(cmd)]; !ok {
+		return "", ""
 	}
 
-	block := xmlStr[oi : ci+len("</tool_call>")]
+	return cmd, arg
+}
 
-	var call toolCallXML
-	decoder := xml.NewDecoder(strings.NewReader(block))
-	if err := decoder.Decode(&call); err != nil {
-		return "", nil, fmt.Errorf("xml decode: %w", err)
+// collectContent collects lines from the given start index until an END
+// marker is found on its own line. The content lines are joined with
+// newlines and trimmed.
+func collectContent(lines []string, start int) string {
+	var contentLines []string
+	for j := start; j < len(lines); j++ {
+		trimmed := strings.TrimSpace(lines[j])
+		if trimmed == "END" {
+			break
+		}
+		contentLines = append(contentLines, lines[j])
 	}
-
-	name := strings.TrimSpace(call.Name)
-	if name == "" {
-		return "", nil, fmt.Errorf("tool name is empty")
-	}
-
-	params := make(map[string]string, len(call.Params))
-	for _, p := range call.Params {
-		// Use lowercase param name for consistency
-		key := strings.ToLower(p.XMLName.Local)
-		params[key] = strings.TrimSpace(p.Value)
-	}
-
-	return name, params, nil
+	return strings.TrimSpace(strings.Join(contentLines, "\n"))
 }
 
 // checkPermission validates that a tool has the required permissions.
 // Write operations (write_file) require rw grants.
 // Read operations (read_file, list_dir, check_syntax) require ro grants.
-// Non-filesystem operations (run_command, search_docs) need no grant.
+// Non-filesystem operations (run_command, search_wiki) need no grant.
 func (e *ToolExecutor) checkPermission(toolName string, params map[string]string) bool {
 	path, hasPath := params["path"]
 	if !hasPath {

@@ -19,17 +19,16 @@ const (
 // It coordinates the full user→LLM→tools→LLM cycle:
 //   1. User sends a message
 //   2. Orchestrator calls Agent.Run() to get the LLM response
-//   3. Response is parsed for <tool_call> XML blocks
-//   4. If a tool call is found, the orchestrator:
-//      a. Extracts the XML tool call
-//      b. Calls ToolExecutor.Execute() for sandboxed execution
-//      c. Formats the result as a <tool_result> XML block
-//      d. Feeds the result back to Agent.Run() (loop)
-//   5. When the LLM responds without a tool call, the loop ends
+//   3. Response is scanned for text-based tool commands (READ:, WRITE:, etc.)
+//   4. If a tool command is found, the orchestrator:
+//      a. Passes the full response to ToolExecutor.Execute()
+//      b. Formats the result as plain text for the LLM
+//      c. Feeds the result back to Agent.Run() (loop)
+//   5. When the LLM responds without a tool command, the loop ends
 //
 // Safety mechanisms:
 //   - Max 5 iterations prevent infinite loops
-//   - After 3 consecutive XML parse errors, the orchestrator
+//   - After 3 consecutive parse errors, the orchestrator
 //     can switch to a fallback (model fallback support)
 //   - 30-second per-tool timeout enforced by ToolExecutor
 type ChatOrchestrator struct {
@@ -60,7 +59,7 @@ func WithFallback(agent domain.Agent) ChatOrchestratorOption {
 
 // NewChatOrchestrator creates a ChatOrchestrator with constructor-injected dependencies.
 // agent is the primary LLM adapter (e.g., OllamaClient).
-// executor handles XML parsing, permission checks, and tool routing.
+// executor handles text command parsing, permission checks, and tool routing.
 // grantMgr manages session-scoped permission grants.
 func NewChatOrchestrator(agent domain.Agent, executor *ToolExecutor, grantMgr *GrantManager, opts ...ChatOrchestratorOption) *ChatOrchestrator {
 	o := &ChatOrchestrator{
@@ -104,10 +103,9 @@ func (o *ChatOrchestrator) HandleMessage(ctx context.Context, session *domain.Se
 			return "", fmt.Errorf("orchestrator: agent run failed (iteration %d): %w", i+1, err)
 		}
 
-		// Try to extract a tool call from the response
-		toolXML, hasToolCall := extractToolCallXML(response)
-		if !hasToolCall {
-			// No tool call — this is the final response
+		// Try to extract a tool command from the response
+		if !hasToolCommand(response) {
+			// No tool command — this is the final response
 			o.parseErrors = 0
 			session.Messages = append(session.Messages, domain.ChatMessage{
 				Role:      "assistant",
@@ -124,13 +122,13 @@ func (o *ChatOrchestrator) HandleMessage(ctx context.Context, session *domain.Se
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 		})
 
-		// Execute the tool through the sandboxed executor
-		result, err := o.executor.Execute(ctx, session, toolXML)
-		// Format the result as XML for the LLM
-		resultXML := formatToolResult(result)
+		// Execute the tool through the sandboxed executor (full response)
+		result, err := o.executor.Execute(ctx, session, response)
+		// Format the result as plain text for the LLM
+		resultText := formatToolResult(result)
 		session.Messages = append(session.Messages, domain.ChatMessage{
 			Role:      "tool",
-			Content:   resultXML,
+			Content:   resultText,
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 		})
 
@@ -163,42 +161,40 @@ func (o *ChatOrchestrator) tryFallback(ctx context.Context, session *domain.Sess
 	return response, nil
 }
 
-// extractToolCallXML attempts to extract a <tool_call>...</tool_call> block
-// from an LLM response. Returns the complete XML string and true if found.
-func extractToolCallXML(response string) (string, bool) {
-	oi := strings.Index(response, "<tool_call>")
-	ci := strings.Index(response, "</tool_call>")
-	if oi == -1 || ci == -1 || oi >= ci {
-		return "", false
+// hasToolCommand checks whether an LLM response contains a text-based
+// tool command (READ:, WRITE:, LIST:, RUN:, CHECK:, or SEARCH: on a line).
+// Returns true if at least one recognized command keyword is found.
+func hasToolCommand(response string) bool {
+	lines := strings.Split(response, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Check for any recognized command prefix
+		for _, cmd := range []string{"READ:", "WRITE:", "LIST:", "RUN:", "CHECK:", "SEARCH:"} {
+			upperTrimmed := strings.ToUpper(trimmed)
+			if strings.HasPrefix(upperTrimmed, cmd) {
+				return true
+			}
+		}
 	}
-	return response[oi : ci+len("</tool_call>")], true
+	return false
 }
 
-// formatToolResult serializes a ToolResult into an XML <tool_result> block
-// that the LLM can parse.
+// formatToolResult serializes a ToolResult into a plain-text message
+// that the LLM can understand.
 //
 // On success:
 //
-//	<tool_result><output>...content...</output></tool_result>
+//	Tool result: ...output...
 //
 // On failure:
 //
-//	<tool_result><error>...description...</error></tool_result>
+//	Tool error: ...description...
 func formatToolResult(result domain.ToolResult) string {
 	if result.Success {
-		return fmt.Sprintf("<tool_result>\n<output>%s</output>\n</tool_result>",
-			xmlEscape(result.Output))
+		return fmt.Sprintf("Tool result:\n%s", result.Output)
 	}
-	return fmt.Sprintf("<tool_result>\n<error>%s</error>\n</tool_result>",
-		xmlEscape(result.Error))
-}
-
-// xmlEscape escapes special XML characters in text content.
-func xmlEscape(s string) string {
-	s = strings.ReplaceAll(s, "&", "&amp;")
-	s = strings.ReplaceAll(s, "<", "&lt;")
-	s = strings.ReplaceAll(s, ">", "&gt;")
-	return s
+	return fmt.Sprintf("Tool error: %s", result.Error)
 }
 
 // Agent returns the primary agent for inspection or health checks.

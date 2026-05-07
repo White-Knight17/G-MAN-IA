@@ -70,7 +70,7 @@ func TestChatOrchestrator_SimpleResponse_NoToolCall(t *testing.T) {
 func TestChatOrchestrator_ToolCallOneTurn(t *testing.T) {
 	agent := &stubAgent{
 		responses: []string{
-			`<tool_call><name>read_file</name><path>/home/user/.config/hypr/hyprland.conf</path></tool_call>`,
+			"Let me read your config.\nREAD: /home/user/.config/hypr/hyprland.conf",
 			"Here's the summary of your config: it looks good!",
 		},
 	}
@@ -116,14 +116,14 @@ func TestChatOrchestrator_ToolCallOneTurn(t *testing.T) {
 }
 
 func TestChatOrchestrator_MaxIterations(t *testing.T) {
-	// Agent always returns a tool call, causing an infinite loop
+	// Agent always returns a tool command, causing an infinite loop
 	agent := &stubAgent{
 		responses: []string{
-			`<tool_call><name>read_file</name><path>/tmp/a</path></tool_call>`,
-			`<tool_call><name>read_file</name><path>/tmp/b</path></tool_call>`,
-			`<tool_call><name>read_file</name><path>/tmp/c</path></tool_call>`,
-			`<tool_call><name>read_file</name><path>/tmp/d</path></tool_call>`,
-			`<tool_call><name>read_file</name><path>/tmp/e</path></tool_call>`,
+			"READ: /tmp/a",
+			"READ: /tmp/b",
+			"READ: /tmp/c",
+			"READ: /tmp/d",
+			"READ: /tmp/e",
 			"Should not reach this — max iterations is 5",
 		},
 	}
@@ -186,7 +186,7 @@ func TestChatOrchestrator_ToolErrorRecovery(t *testing.T) {
 	// Agent calls a tool, tool fails, agent retries with different approach
 	agent := &stubAgent{
 		responses: []string{
-			`<tool_call><name>read_file</name><path>/nonexistent</path></tool_call>`,
+			"READ: /nonexistent",
 			"That file doesn't exist. Would you like me to check another path?",
 		},
 	}

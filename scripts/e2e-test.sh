@@ -4,7 +4,7 @@
 # ==============================================================================
 # Validates the full system end-to-end:
 #   - Ollama connectivity and model availability
-#   - The model's ability to generate XML tool calls
+#   - The model's ability to generate text-based tool commands
 #   - File creation, reading, syntax checking, and wiki search
 #
 # Usage:
@@ -54,7 +54,7 @@ fail_test() {
 # ---------------------------------------------------------------------------
 send_prompt() {
     local prompt="$1"
-    local system_prompt="You are Harvey, an Arch Linux assistant. You have tools: read_file, write_file, list_dir, run_command, check_syntax, search_wiki. When you need to use a tool, respond with only an XML <tool_call> block. Use absolute paths under /home."
+    local system_prompt="You are Harvey, an Arch Linux assistant for Arch Linux + Hyprland users. When you need to perform an action, use these commands on their own line: READ: /path/to/file — read a file; WRITE: /path/to/file — write new content (content on next lines, end with END); LIST: /path/to/dir — list directory; RUN: command — run a safe command; CHECK: filetype — check config syntax (content on next lines, end with END); SEARCH: query — search wiki. Use absolute paths under /home. Never use RUN for dangerous commands (rm, sudo)."
 
     curl -s "${OLLAMA_URL}/api/chat" \
         -d "{
@@ -125,12 +125,12 @@ echo -e "${YELLOW}[TEST 1/5]${NC} List the files in ~/.config"
 RESPONSE=$(send_prompt "List the files in ~/.config")
 
 if [ -n "$RESPONSE" ]; then
-    if echo "$RESPONSE" | grep -qi "<tool_call"; then
-        pass_test "Model returned tool_call for list_dir"
-    elif echo "$RESPONSE" | grep -qi "<tool_call"; then
-        pass_test "Model returned tool_call for list_dir"
+    if echo "$RESPONSE" | grep -qiE "LIST:.*config"; then
+        pass_test "Model returned LIST command for list_dir"
+    elif echo "$RESPONSE" | grep -qiE "(READ:|WRITE:|LIST:|RUN:|CHECK:|SEARCH:)"; then
+        pass_test "Model returned a tool command"
     else
-        fail_test "Response does not contain <tool_call>" "got: $(echo "$RESPONSE" | head -c 100)"
+        fail_test "Response does not contain a tool command" "got: $(echo "$RESPONSE" | head -c 100)"
     fi
 else
     fail_test "Empty response from Ollama" "no content returned"
@@ -143,15 +143,15 @@ echo -e "${YELLOW}[TEST 2/5]${NC} Create a file called harvey-e2e-test.conf in ~
 RESPONSE=$(send_prompt "Create a file called harvey-e2e-test.conf in ~/.config with content 'name=test'")
 
 if [ -n "$RESPONSE" ]; then
-    if echo "$RESPONSE" | grep -qi "<tool_call"; then
+    if echo "$RESPONSE" | grep -qiE "(READ:|WRITE:|LIST:|RUN:|CHECK:|SEARCH:)"; then
         # Check if model tried write_file
-        if echo "$RESPONSE" | grep -qi "write_file"; then
-            pass_test "Model returned write_file tool_call with correct path"
+        if echo "$RESPONSE" | grep -qi "WRITE:"; then
+            pass_test "Model returned WRITE command with correct path"
         else
-            fail_test "Model did not use write_file" "$(echo "$RESPONSE" | head -c 150)"
+            fail_test "Model did not use WRITE" "$(echo "$RESPONSE" | head -c 150)"
         fi
     else
-        fail_test "Response does not contain <tool_call>" "$(echo "$RESPONSE" | head -c 100)"
+        fail_test "Response does not contain a tool command" "$(echo "$RESPONSE" | head -c 100)"
     fi
 else
     fail_test "Empty response from Ollama" "no content returned"
@@ -168,14 +168,14 @@ echo -e "${YELLOW}[TEST 3/5]${NC} Read the file ~/.config/harvey-e2e-test.conf"
 RESPONSE=$(send_prompt "Read the file ~/.config/harvey-e2e-test.conf")
 
 if [ -n "$RESPONSE" ]; then
-    if echo "$RESPONSE" | grep -qi "<tool_call"; then
-        if echo "$RESPONSE" | grep -qi "read_file"; then
-            pass_test "Model returned read_file tool_call for test file"
+    if echo "$RESPONSE" | grep -qiE "(READ:|WRITE:|LIST:|RUN:|CHECK:|SEARCH:)"; then
+        if echo "$RESPONSE" | grep -qi "READ:"; then
+            pass_test "Model returned READ command for test file"
         else
-            fail_test "Model did not use read_file" "$(echo "$RESPONSE" | head -c 150)"
+            fail_test "Model did not use READ" "$(echo "$RESPONSE" | head -c 150)"
         fi
     else
-        fail_test "Response does not contain <tool_call>" "$(echo "$RESPONSE" | head -c 100)"
+        fail_test "Response does not contain a tool command" "$(echo "$RESPONSE" | head -c 100)"
     fi
 else
     fail_test "Empty response from Ollama" "no content returned"
@@ -188,15 +188,15 @@ echo -e "${YELLOW}[TEST 4/5]${NC} Check syntax of this Hyprland config: monitor=
 RESPONSE=$(send_prompt "Check syntax of this Hyprland config: monitor=,DP-1,1920x1080@144,0x0,1")
 
 if [ -n "$RESPONSE" ]; then
-    if echo "$RESPONSE" | grep -qi "<tool_call"; then
-        if echo "$RESPONSE" | grep -qi "check_syntax" || echo "$RESPONSE" | grep -qi "syntax"; then
-            pass_test "Model returned check_syntax tool_call with Hyprland config"
+    if echo "$RESPONSE" | grep -qiE "(READ:|WRITE:|LIST:|RUN:|CHECK:|SEARCH:)"; then
+        if echo "$RESPONSE" | grep -qi "CHECK:" || echo "$RESPONSE" | grep -qi "syntax"; then
+            pass_test "Model returned CHECK command with Hyprland config"
         else
-            # Some models might not know check_syntax by name but still try
-            pass_test "Model returned tool_call for syntax checking"
+            # Some models might not know CHECK by name but still try
+            pass_test "Model returned a tool command for syntax checking"
         fi
     else
-        fail_test "Response does not contain <tool_call>" "$(echo "$RESPONSE" | head -c 100)"
+        fail_test "Response does not contain a tool command" "$(echo "$RESPONSE" | head -c 100)"
     fi
 else
     fail_test "Empty response from Ollama" "no content returned"
@@ -209,15 +209,15 @@ echo -e "${YELLOW}[TEST 5/5]${NC} Search for 'waybar config' in the wiki"
 RESPONSE=$(send_prompt "Search for 'waybar config' in the wiki")
 
 if [ -n "$RESPONSE" ]; then
-    if echo "$RESPONSE" | grep -qi "<tool_call"; then
-        if echo "$RESPONSE" | grep -qi "search"; then
-            pass_test "Model returned search tool_call for 'waybar config'"
+    if echo "$RESPONSE" | grep -qiE "(READ:|WRITE:|LIST:|RUN:|CHECK:|SEARCH:)"; then
+        if echo "$RESPONSE" | grep -qi "SEARCH:"; then
+            pass_test "Model returned SEARCH command for 'waybar config'"
         else
-            # Model tried a tool, though maybe not search_wiki by exact name
-            pass_test "Model returned tool_call for wiki search"
+            # Model tried a tool, though maybe not SEARCH by exact name
+            pass_test "Model returned a tool command for wiki search"
         fi
     else
-        fail_test "Response does not contain <tool_call>" "$(echo "$RESPONSE" | head -c 100)"
+        fail_test "Response does not contain a tool command" "$(echo "$RESPONSE" | head -c 100)"
     fi
 else
     fail_test "Empty response from Ollama" "no content returned"
@@ -247,7 +247,7 @@ echo ""
 if [ "$FAIL" -gt 0 ]; then
     echo -e "${RED}✗ Some tests FAILED.${NC}"
     echo ""
-    echo "Note: llama3.2:3b may not always produce perfect XML tool calls."
+    echo "Note: llama3.2:3b may not always produce perfect tool commands."
     echo "The model verification step showed 80% accuracy (8/10 prompts)."
     echo "This E2E suite validates model integration, not 100% deterministic output."
     exit 1

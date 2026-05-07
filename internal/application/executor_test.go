@@ -17,9 +17,9 @@ type stubTool struct {
 	execute     func(ctx context.Context, params map[string]string) (domain.ToolResult, error)
 }
 
-func (s *stubTool) Name() string                { return s.name }
-func (s *stubTool) Description() string          { return s.description }
-func (s *stubTool) SchemaXML() string            { return s.schema }
+func (s *stubTool) Name() string               { return s.name }
+func (s *stubTool) Description() string         { return s.description }
+func (s *stubTool) SchemaXML() string           { return s.schema }
 func (s *stubTool) Execute(ctx context.Context, params map[string]string) (domain.ToolResult, error) {
 	if s.execute != nil {
 		return s.execute(ctx, params)
@@ -87,24 +87,32 @@ func (p *stubPermissionRepo) ListGrants() []domain.Grant {
 
 func TestToolExecutor_ParseAndExecute(t *testing.T) {
 	tests := []struct {
-		name       string
-		toolCallXML string
-		tools      []domain.Tool
-		preGrants  map[string]domain.PermissionMode
-		input      string
-		wantOutput string
+		name        string
+		response    string
+		tools       []domain.Tool
+		preGrants   map[string]domain.PermissionMode
+		wantOutput  string
 		wantSuccess bool
 		wantErr     bool
 		errSubstr   string
 	}{
 		{
-			name:        "valid read_file tool call",
-			toolCallXML: `<tool_call><name>read_file</name><path>/home/user/.config/hypr/hyprland.conf</path></tool_call>`,
+			name:     "plain text response with no command",
+			response: "Hello! I can help you configure your system.",
+			tools: []domain.Tool{
+				&stubTool{name: "read_file", description: "Reads a file", schema: ""},
+			},
+			wantOutput:  "Hello! I can help you configure your system.",
+			wantSuccess: true,
+		},
+		{
+			name:     "READ command",
+			response: "Let me read that file for you.\nREAD: /home/user/.config/hypr/hyprland.conf",
 			tools: []domain.Tool{
 				&stubTool{
 					name:        "read_file",
 					description: "Reads a file",
-					schema:      `<tool_call><name>read_file</name><path>/absolute/path</path></tool_call>`,
+					schema:      "",
 					execute: func(ctx context.Context, params map[string]string) (domain.ToolResult, error) {
 						return domain.ToolResult{Success: true, Output: "file contents"}, nil
 					},
@@ -117,13 +125,35 @@ func TestToolExecutor_ParseAndExecute(t *testing.T) {
 			wantSuccess: true,
 		},
 		{
-			name:        "case-insensitive tool name Llama3.2 workaround",
-			toolCallXML: `<tool_call><name>List_dir</name><path>/home/user/.config</path></tool_call>`,
+			name:     "case-insensitive command matching (lowercase read)",
+			response: "read: /home/user/.config",
 			tools: []domain.Tool{
 				&stubTool{
 					name:        "list_dir",
 					description: "Lists a directory",
-					schema:      `<tool_call><name>list_dir</name><path>/absolute/path</path></tool_call>`,
+					schema:      "",
+					execute: func(ctx context.Context, params map[string]string) (domain.ToolResult, error) {
+						return domain.ToolResult{Success: true, Output: params["path"]}, nil
+					},
+				},
+			},
+			preGrants: map[string]domain.PermissionMode{
+				"/home/user/.config": domain.PermissionRead,
+			},
+			// "read:" starts with READ which maps to read_file, but the stub tool is list_dir.
+			// The executor will try to execute read_file and fail (unknown tool).
+			// Let's test with the right mapping: use "LIST:" for list_dir.
+			wantErr:   true,
+			errSubstr: "unknown tool",
+		},
+		{
+			name:     "LIST command (case-insensitive)",
+			response: "list: /home/user/.config",
+			tools: []domain.Tool{
+				&stubTool{
+					name:        "list_dir",
+					description: "Lists a directory",
+					schema:      "",
 					execute: func(ctx context.Context, params map[string]string) (domain.ToolResult, error) {
 						return domain.ToolResult{Success: true, Output: params["path"]}, nil
 					},
@@ -136,22 +166,127 @@ func TestToolExecutor_ParseAndExecute(t *testing.T) {
 			wantSuccess: true,
 		},
 		{
-			name:        "unknown tool name",
-			toolCallXML: `<tool_call><name>unknown_tool</name><path>/tmp</path></tool_call>`,
-			tools: []domain.Tool{
-				&stubTool{name: "read_file", description: "Reads a file", schema: "<tool_call></tool_call>"},
-			},
-			wantErr:   true,
-			errSubstr: "unknown tool",
-		},
-		{
-			name:        "permission denied for write without rw grant",
-			toolCallXML: `<tool_call><name>write_file</name><path>/home/user/.config/hypr/hyprland.conf</path></tool_call>`,
+			name:     "WRITE command with END marker",
+			response: "WRITE: /home/user/.config/hypr/hyprland.conf\nmonitor=eDP-1,1920x1080,0x0,1\nEND",
 			tools: []domain.Tool{
 				&stubTool{
 					name:        "write_file",
 					description: "Writes a file",
-					schema:      `<tool_call><name>write_file</name><path>/absolute/path</path><content>...</content></tool_call>`,
+					schema:      "",
+					execute: func(ctx context.Context, params map[string]string) (domain.ToolResult, error) {
+						if params["content"] != "monitor=eDP-1,1920x1080,0x0,1" {
+							return domain.ToolResult{Success: false, Error: "unexpected content"}, nil
+						}
+						return domain.ToolResult{Success: true, Output: "wrote file"}, nil
+					},
+				},
+			},
+			preGrants: map[string]domain.PermissionMode{
+				"/home/user/.config/hypr/hyprland.conf": domain.PermissionWrite,
+			},
+			wantOutput:  "wrote file",
+			wantSuccess: true,
+		},
+		{
+			name:     "WRITE command with multiline content",
+			response: "WRITE: /tmp/test.conf\nline one\nline two\nline three\nEND\nMore text ignored",
+			tools: []domain.Tool{
+				&stubTool{
+					name:        "write_file",
+					description: "Writes a file",
+					schema:      "",
+					execute: func(ctx context.Context, params map[string]string) (domain.ToolResult, error) {
+						if params["content"] != "line one\nline two\nline three" {
+							return domain.ToolResult{Success: false, Error: "unexpected content"}, nil
+						}
+						return domain.ToolResult{Success: true, Output: "wrote file"}, nil
+					},
+				},
+			},
+			preGrants: map[string]domain.PermissionMode{
+				"/tmp/test.conf": domain.PermissionWrite,
+			},
+			wantOutput:  "wrote file",
+			wantSuccess: true,
+		},
+		{
+			name:     "RUN command",
+			response: "RUN: hyprctl monitors",
+			tools: []domain.Tool{
+				&stubTool{
+					name:        "run_command",
+					description: "Runs a command",
+					schema:      "",
+					execute: func(ctx context.Context, params map[string]string) (domain.ToolResult, error) {
+						if params["command"] != "hyprctl monitors" {
+							return domain.ToolResult{Success: false, Error: "wrong command"}, nil
+						}
+						return domain.ToolResult{Success: true, Output: "command output"}, nil
+					},
+				},
+			},
+			// No grants needed
+			wantOutput:  "command output",
+			wantSuccess: true,
+		},
+		{
+			name:     "CHECK command with content and END",
+			response: "CHECK: hyprland\nmonitor=,DP-1,1920x1080@144,0x0,1\nEND",
+			tools: []domain.Tool{
+				&stubTool{
+					name:        "check_syntax",
+					description: "Checks syntax",
+					schema:      "",
+					execute: func(ctx context.Context, params map[string]string) (domain.ToolResult, error) {
+						if params["filetype"] != "hyprland" {
+							return domain.ToolResult{Success: false, Error: "wrong filetype"}, nil
+						}
+						if params["content"] != "monitor=,DP-1,1920x1080@144,0x0,1" {
+							return domain.ToolResult{Success: false, Error: "wrong content"}, nil
+						}
+						return domain.ToolResult{Success: true, Output: "Valid config"}, nil
+					},
+				},
+			},
+			wantOutput:  "Valid config",
+			wantSuccess: true,
+		},
+		{
+			name:     "SEARCH command",
+			response: "SEARCH: waybar config",
+			tools: []domain.Tool{
+				&stubTool{
+					name:        "search_wiki",
+					description: "Searches wiki",
+					schema:      "",
+					execute: func(ctx context.Context, params map[string]string) (domain.ToolResult, error) {
+						if params["query"] != "waybar config" {
+							return domain.ToolResult{Success: false, Error: "wrong query"}, nil
+						}
+						return domain.ToolResult{Success: true, Output: "Found 3 results"}, nil
+					},
+				},
+			},
+			wantOutput:  "Found 3 results",
+			wantSuccess: true,
+		},
+		{
+			name:     "unknown command keyword treated as conversational",
+			response: "UNKNOWN: something",
+			tools: []domain.Tool{
+				&stubTool{name: "read_file", description: "Reads", schema: ""},
+			},
+			wantOutput:  "UNKNOWN: something",
+			wantSuccess: true,
+		},
+		{
+			name:     "permission denied for write without rw grant",
+			response: "WRITE: /home/user/.config/hypr/hyprland.conf\nnew content\nEND",
+			tools: []domain.Tool{
+				&stubTool{
+					name:        "write_file",
+					description: "Writes a file",
+					schema:      "",
 				},
 			},
 			preGrants: map[string]domain.PermissionMode{
@@ -161,13 +296,13 @@ func TestToolExecutor_ParseAndExecute(t *testing.T) {
 			errSubstr: "permission denied",
 		},
 		{
-			name:        "write_file succeeds with rw grant",
-			toolCallXML: `<tool_call><name>write_file</name><path>/home/user/.config/hypr/hyprland.conf</path><content>new content</content></tool_call>`,
+			name:     "write_file succeeds with rw grant",
+			response: "WRITE: /home/user/.config/hypr/hyprland.conf\nnew content\nEND",
 			tools: []domain.Tool{
 				&stubTool{
 					name:        "write_file",
 					description: "Writes a file",
-					schema:      `<tool_call><name>write_file</name><path>/absolute/path</path><content>...</content></tool_call>`,
+					schema:      "",
 					execute: func(ctx context.Context, params map[string]string) (domain.ToolResult, error) {
 						return domain.ToolResult{Success: true, Output: "wrote file"}, nil
 					},
@@ -180,13 +315,13 @@ func TestToolExecutor_ParseAndExecute(t *testing.T) {
 			wantSuccess: true,
 		},
 		{
-			name:        "no permission check for non-filesystem tools",
-			toolCallXML: `<tool_call><name>run_command</name><cmd>hyprctl monitors</cmd></tool_call>`,
+			name:     "no permission check for non-filesystem tools (RUN)",
+			response: "RUN: hyprctl monitors",
 			tools: []domain.Tool{
 				&stubTool{
 					name:        "run_command",
 					description: "Runs a command",
-					schema:      `<tool_call><name>run_command</name><cmd>command</cmd></tool_call>`,
+					schema:      "",
 					execute: func(ctx context.Context, params map[string]string) (domain.ToolResult, error) {
 						return domain.ToolResult{Success: true, Output: "command output"}, nil
 					},
@@ -197,40 +332,22 @@ func TestToolExecutor_ParseAndExecute(t *testing.T) {
 			wantSuccess: true,
 		},
 		{
-			name:        "malformed XML without tool_call wrapper",
-			toolCallXML: `<name>read_file</name><path>/tmp</path>`,
-			tools: []domain.Tool{
-				&stubTool{name: "read_file", description: "Reads a file", schema: ""},
-			},
-			wantErr:   true,
-			errSubstr: "no valid",
-		},
-		{
-			name:        "empty tool_call block",
-			toolCallXML: `<tool_call></tool_call>`,
-			tools: []domain.Tool{
-				&stubTool{name: "read_file", description: "Reads a file", schema: ""},
-			},
-			wantErr:   true,
-			errSubstr: "name is empty",
-		},
-		{
-			name:        "valid tool_call with extra text before/after",
-			toolCallXML: `Some text before <tool_call><name>read_file</name><path>/tmp/test</path></tool_call> and text after`,
+			name:     "multiple commands — first one wins",
+			response: "READ: /tmp/first\nREAD: /tmp/second",
 			tools: []domain.Tool{
 				&stubTool{
 					name:        "read_file",
 					description: "Reads a file",
-					schema:      `<tool_call><name>read_file</name><path>/absolute/path</path></tool_call>`,
+					schema:      "",
 					execute: func(ctx context.Context, params map[string]string) (domain.ToolResult, error) {
-						return domain.ToolResult{Success: true, Output: "ok"}, nil
+						return domain.ToolResult{Success: true, Output: "first file content"}, nil
 					},
 				},
 			},
 			preGrants: map[string]domain.PermissionMode{
-				"/tmp/test": domain.PermissionRead,
+				"/tmp/first": domain.PermissionRead,
 			},
-			wantOutput:  "ok",
+			wantOutput:  "first file content",
 			wantSuccess: true,
 		},
 	}
@@ -246,7 +363,7 @@ func TestToolExecutor_ParseAndExecute(t *testing.T) {
 			executor := application.NewToolExecutor(tt.tools, sandbox, perms)
 			session := &domain.Session{ID: "test"}
 
-			result, err := executor.Execute(context.Background(), session, tt.toolCallXML)
+			result, err := executor.Execute(context.Background(), session, tt.response)
 
 			if tt.wantErr {
 				if err == nil {
@@ -278,7 +395,7 @@ func TestToolExecutor_ToolExecutionError(t *testing.T) {
 		&stubTool{
 			name:        "read_file",
 			description: "Reads a file",
-			schema:      `<tool_call><name>read_file</name><path>/path</path></tool_call>`,
+			schema:      "",
 			execute: func(ctx context.Context, params map[string]string) (domain.ToolResult, error) {
 				return domain.ToolResult{}, context.DeadlineExceeded
 			},
@@ -291,8 +408,8 @@ func TestToolExecutor_ToolExecutionError(t *testing.T) {
 	sandbox := &stubSandbox{}
 	executor := application.NewToolExecutor(tools, sandbox, perms)
 
-	xml := `<tool_call><name>read_file</name><path>/path</path></tool_call>`
-	result, err := executor.Execute(context.Background(), &domain.Session{ID: "test"}, xml)
+	response := "READ: /path"
+	result, err := executor.Execute(context.Background(), &domain.Session{ID: "test"}, response)
 
 	if err == nil {
 		t.Error("expected error for tool execution failure")

@@ -19,7 +19,7 @@ import (
 const (
 	DefaultBaseURL = "http://localhost:11434"
 	DefaultModel   = "llama3.2:3b"
-	DefaultTimeout = 30 * time.Second
+	DefaultTimeout = 120 * time.Second
 )
 
 // Predefined errors returned by the client.
@@ -170,34 +170,30 @@ func (c *OllamaClient) buildMessages(input string, session *domain.Session) []ol
 	return messages
 }
 
-// buildSystemPrompt constructs the system prompt that instructs the LLM
-// how to use tools and formats its responses as XML tool calls.
+// buildSystemPrompt constructs a lightweight system prompt that instructs
+// the LLM to use simple text-based commands instead of heavy XML schemas.
+// This reduces prompt tokens significantly (~300 vs ~2000 for XML),
+// which is critical for CPU-only small models like llama3.2:3b.
 func (c *OllamaClient) buildSystemPrompt() string {
 	var sb strings.Builder
 
-	sb.WriteString("You are Harvey, an Arch Linux dotfile management assistant running on Hyprland.\n")
-	sb.WriteString("You help users manage configuration files, troubleshoot issues, and run allowed commands.\n\n")
+	sb.WriteString("You are Harvey, a friendly Linux assistant for Arch Linux + Hyprland users.\n")
+	sb.WriteString("You help configure dotfiles, explain settings, and run safe commands.\n\n")
 
 	if len(c.tools) > 0 {
-		sb.WriteString("## Available Tools\n\n")
-		sb.WriteString("When you need to use a tool, respond ONLY with an XML <tool_call> block. ")
-		sb.WriteString("Do not add any text before or after the XML.\n\n")
-
-		for _, tool := range c.tools {
-			sb.WriteString("### ")
-			sb.WriteString(tool.Name())
-			sb.WriteString("\n")
-			sb.WriteString(tool.Description())
-			sb.WriteString("\nSchema:\n```xml\n")
-			sb.WriteString(tool.SchemaXML())
-			sb.WriteString("\n```\n\n")
-		}
-
-		sb.WriteString("## Rules\n")
-		sb.WriteString("- Only use tools listed above. Never invent new tools.\n")
-		sb.WriteString("- Use absolute paths (e.g., /home/user/.config/hypr/hyprland.conf).\n")
-		sb.WriteString("- After receiving a tool result, respond with the final answer or another tool call.\n")
-		sb.WriteString("- Do NOT include explanations inside the <tool_call> block.\n")
+		sb.WriteString("When you need to perform an action, use these commands on their own line:\n")
+		sb.WriteString("READ: /path/to/file — read a file\n")
+		sb.WriteString("WRITE: /path/to/file — write new content (content on next lines, end with END)\n")
+		sb.WriteString("LIST: /path/to/dir — list directory contents\n")
+		sb.WriteString("RUN: command — run a safe command\n")
+		sb.WriteString("CHECK: filetype — check config syntax (hyprland, waybar, or bash). Content on next lines, end with END\n")
+		sb.WriteString("SEARCH: query — search local wiki for information\n\n")
+		sb.WriteString("IMPORTANT:\n")
+		sb.WriteString("- Only use commands when you need to read or modify files\n")
+		sb.WriteString("- Explain what you're doing before using a command\n")
+		sb.WriteString("- Never use RUN for dangerous commands (rm, sudo, etc.)\n")
+		sb.WriteString("- For WRITE and CHECK, put the content on the lines after the command, then END on its own line\n")
+		sb.WriteString("- Be concise and helpful\n")
 	} else {
 		sb.WriteString("You do not have any tools available. Answer the user directly.\n")
 	}

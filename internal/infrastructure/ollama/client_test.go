@@ -223,14 +223,26 @@ func TestOllamaClient_SystemPrompt(t *testing.T) {
 	if !strings.Contains(sysPrompt, "Harvey") {
 		t.Error("system prompt should mention Harvey")
 	}
-	if !strings.Contains(sysPrompt, "read_file") {
-		t.Error("system prompt should include read_file tool")
+	if !strings.Contains(sysPrompt, "READ:") {
+		t.Error("system prompt should include READ: command format")
 	}
-	if !strings.Contains(sysPrompt, "write_file") {
-		t.Error("system prompt should include write_file tool")
+	if !strings.Contains(sysPrompt, "WRITE:") {
+		t.Error("system prompt should include WRITE: command format")
 	}
-	if !strings.Contains(sysPrompt, "tool_call") {
-		t.Error("system prompt should mention tool_call format")
+	if !strings.Contains(sysPrompt, "LIST:") {
+		t.Error("system prompt should include LIST: command format")
+	}
+	if !strings.Contains(sysPrompt, "RUN:") {
+		t.Error("system prompt should include RUN: command format")
+	}
+	if !strings.Contains(sysPrompt, "CHECK:") {
+		t.Error("system prompt should include CHECK: command format")
+	}
+	if !strings.Contains(sysPrompt, "SEARCH:") {
+		t.Error("system prompt should include SEARCH: command format")
+	}
+	if !strings.Contains(sysPrompt, "END") {
+		t.Error("system prompt should mention END marker")
 	}
 
 	// Second message should be user input
