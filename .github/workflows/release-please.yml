@@ -13,9 +13,43 @@ jobs:
   release-please:
     name: Release
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      major: ${{ steps.release.outputs.major }}
+      minor: ${{ steps.release.outputs.minor }}
+      patch: ${{ steps.release.outputs.patch }}
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           release-type: go
           package-name: gman
+
+  tag-major-minor:
+    name: Tag vMAJOR and vMAJOR.MINOR
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create major and minor tags
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          MAJOR="v${{ needs.release-please.outputs.major }}"
+          MINOR="v${{ needs.release-please.outputs.major }}.${{ needs.release-please.outputs.minor }}"
+
+          echo "Tagging: ${MAJOR} and ${MINOR}"
+
+          git tag -f "${MAJOR}" "${MINOR}"
+          git push -f origin "${MAJOR}" "${MINOR}"
+
+          echo "✅ Tags pushed: ${MAJOR}, ${MINOR}"
