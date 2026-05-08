@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.10.1](https://github.com/White-Knight17/G-MAN-IA/compare/v0.10.0...v0.10.1) (2026-05-08)
+
+
+### Bug Fixes
+
+* **build:** remove target triple from externalBin name ([81389ef](https://github.com/White-Knight17/G-MAN-IA/commit/81389ef04e64b0eed27e69240d4e689a52e28c11))
+* **ci:** add Tauri system deps and pnpm version to CI workflow ([55a1823](https://github.com/White-Knight17/G-MAN-IA/commit/55a1823c8ab682ed1c3dcf17146946fe1881a733))
+* **ci:** add Tauri system deps and pnpm version to CI workflow ([4b53523](https://github.com/White-Knight17/G-MAN-IA/commit/4b535232f7767f6445898e55219aebb2a98e44d0))
+* **ci:** add Tauri system deps and pnpm version to CI workflow ([b47b185](https://github.com/White-Knight17/G-MAN-IA/commit/b47b185cf6f6f0cb3070aa9bbec0feeb873c8c1e))
+
 ## [0.10.0](https://github.com/White-Knight17/G-MAN-IA/compare/v0.9.0...v0.10.0) (2026-05-08)
 
 
