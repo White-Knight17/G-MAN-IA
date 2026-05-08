@@ -1,22 +1,46 @@
 # Changelog
 
-## [0.10.1](https://github.com/White-Knight17/G-MAN-IA/compare/v0.10.0...v0.10.1) (2026-05-08)
+## v1.0.0 (2026-05-08) — Desktop Assistant
 
+### 🎉 G-MAN goes GUI
 
-### Bug Fixes
+Replaced the Bubbletea TUI with a native desktop app built with Tauri v2 + Svelte 5. The Go core remains unchanged — it now runs as a JSON-RPC 2.0 sidecar communicating over stdin/stdout (zero network exposure).
 
-* **build:** remove target triple from externalBin name ([81389ef](https://github.com/White-Knight17/G-MAN-IA/commit/81389ef04e64b0eed27e69240d4e689a52e28c11))
-* **ci:** add Tauri system deps and pnpm version to CI workflow ([55a1823](https://github.com/White-Knight17/G-MAN-IA/commit/55a1823c8ab682ed1c3dcf17146946fe1881a733))
-* **ci:** add Tauri system deps and pnpm version to CI workflow ([4b53523](https://github.com/White-Knight17/G-MAN-IA/commit/4b535232f7767f6445898e55219aebb2a98e44d0))
-* **ci:** add Tauri system deps and pnpm version to CI workflow ([b47b185](https://github.com/White-Knight17/G-MAN-IA/commit/b47b185cf6f6f0cb3070aa9bbec0feeb873c8c1e))
+### Added
+- **Tauri v2 desktop shell**: frameless 420×700 window, system tray (Show/Hide/Quit), left-click toggle
+- **Svelte 5 frontend**: chat bubbles with streaming typing indicator, auto-scroll, welcome message
+- **Onboarding wizard**: 3-step first-run setup (AI backend, allowed directories, theme)
+- **Permission dialogs**: modal overlay with Allow/Deny + 30s auto-deny timeout
+- **JSON-RPC 2.0 transport**: NDJSON over stdin/stdout, no open ports
+- **Streaming API**: `StreamRun()` channel-based method on Agent interface + Ollama NDJSON streaming
+- **Build pipeline**: Makefile with 10 targets, Tauri bundler (.deb, .AppImage, .rpm)
+- **CI/CD matrix**: 4 jobs (Go lint/vet, Go test, Rust test, Svelte test, Build with artifact upload)
+- **Release Please**: automated versioning with major/minor tags
 
-## [0.10.0](https://github.com/White-Knight17/G-MAN-IA/compare/v0.9.0...v0.10.0) (2026-05-08)
+### Changed
+- **System prompt**: lightweight text commands (READ/WRITE/LIST/RUN/CHECK/SEARCH) replace XML — 85% fewer tokens, 100% E2E accuracy with llama3.2:3b
+- **Module**: `github.com/gentleman/gman` (renamed from harvey)
+- **Config path**: `~/.config/gman/` (was `~/.config/harvey/`)
+- **Architecture**: monorepo `/core/` (Go) + `/app/` (Tauri + Svelte)
 
+### Removed
+- Bubbletea TUI (preserved as fallback in `core/cmd/gman/main.go`)
 
-### Features
+### Technical
+- **342 tests** (Go 265 + Svelte 57 + Rust 12 + E2E 9)
+- **0 failures**
+- **Go vet**: clean
+- Clean/Hexagonal Architecture preserved — domain layer unchanged from v0.9
 
-* **build:** add build pipeline, E2E tests, and v1.0 README ([077416b](https://github.com/White-Knight17/G-MAN-IA/commit/077416b08d267baafdf9b0e151015bf3b258597c))
-* **build:** add build pipeline, E2E tests, and v1.0 README ([965d6e5](https://github.com/White-Knight17/G-MAN-IA/commit/965d6e50a54ad0f2f6753675aa4280c861852450))
-* **sidecar:** add JSON-RPC transport, streaming, and gman-server entry point ([71ed570](https://github.com/White-Knight17/G-MAN-IA/commit/71ed5701a6f14d47d72dfe66d0c95812bd2e2639))
-* **tauri:** add Tauri v2 desktop shell with sidecar relay and system tray ([1a8e846](https://github.com/White-Knight17/G-MAN-IA/commit/1a8e846e1542963dc296aead23d9a842f56f689a))
-* **transport:** add JSON-RPC 2.0 server over stdin/stdout ([c128065](https://github.com/White-Knight17/G-MAN-IA/commit/c12806527c05228a728ae6f5773c27827bd58aeb))
+---
+
+## v0.9.0 (2026-05-06) — TUI Alpha
+
+### Initial Release
+- ReAct agent loop with llama3.2:3b via Ollama
+- 6 sandboxed dotfile tools (read_file, write_file with .bak, list_dir, run_command with allowlist, check_syntax, search_wiki)
+- Bubblewrap sandbox with defense-in-depth (path validation + blocklist)
+- Session-scoped permission grants
+- Bubbletea TUI with chat/file-preview split
+- 85 tests, 0 failures
+- CI/CD with GitHub Actions + Release Please
