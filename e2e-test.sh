@@ -1,0 +1,1 @@
+core/scripts/e2e-test.sh
