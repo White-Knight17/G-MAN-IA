@@ -31,3 +31,8 @@ Thumbs.db
 
 core/gman-server
 app/src-tauri/target/
+app/dist/
+app/node_modules/
+app/src-tauri/binaries/
+app/test-results/
+core/harvey

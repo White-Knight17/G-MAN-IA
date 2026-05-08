@@ -36,6 +36,22 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "linux": {
+      "deb": {
+        "depends": ["ollama"]
+      },
+      "appimage": {
+        "bundleMediaFramework": true
+      }
+    },
+    "externalBin": [
+      "binaries/gman-core-x86_64-unknown-linux-gnu"
+    ],
+    "resources": [],
+    "copyright": "Gentleman Programming",
+    "category": "Utility",
+    "shortDescription": "Your friendly Linux AI assistant",
+    "longDescription": "G-MAN is a local, private AI assistant that helps you configure Linux without touching the kernel."
   }
 }

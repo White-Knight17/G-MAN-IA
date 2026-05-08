@@ -17,8 +17,8 @@ Chain strategy: feature-branch-chain
 ## Phase 0: Monorepo + Toolchain
 
 - [x] 0.1 Move `cmd/`, `internal/`, `go.mod`, `go.sum` to `/core/`. `go test ./...` — 0 regressions.
-- [ ] 0.2 Install Rust, Node 22, pnpm. Scaffold `/app/` (Svelte 5 + TS + Vite + Tailwind + `@tauri-apps/api`).
-- [ ] 0.3 Skeleton dirs: `app/src/lib/{components,stores,lib,types}`, `routes/`. Create `/scripts/build.sh` + root `Makefile`.
+- [x] 0.2 Install Rust, Node 22, pnpm. Scaffold `/app/` (Svelte 5 + TS + Vite + Tailwind + `@tauri-apps/api`).
+- [x] 0.3 Skeleton dirs: `app/src/lib/{components,stores,lib,types}`, `routes/`. Create `/scripts/build.sh` + root `Makefile`.
 
 ## Phase 1: Go Sidecar (JSON-RPC + Streaming)
 
@@ -36,26 +36,26 @@ Chain strategy: feature-branch-chain
 
 ## Phase 2: Tauri Shell (Rust)
 
-- [ ] 2.1 `tauri.conf.json`: frameless 420×700, CSP, `externalBin` → `gman-core-$TARGET_TRIPLE`.
-- [ ] 2.2 `Cargo.toml`: `tauri` v2, `tauri-plugin-shell`. Capabilities: shell, notification, window.
-- [ ] 2.3 `main.rs`: spawn sidecar, restart on crash, stdout→Tauri events, invoke→stdin relay.
-- [ ] 2.4 Tray: Show/Hide/Quit. Close→minimize. Icon in `icons/`.
+- [x] 2.1 `tauri.conf.json`: frameless 420×700, CSP, `externalBin` → `gman-core-$TARGET_TRIPLE`.
+- [x] 2.2 `Cargo.toml`: `tauri` v2, `tauri-plugin-shell`. Capabilities: shell, notification, window.
+- [x] 2.3 `main.rs`: spawn sidecar, restart on crash, stdout→Tauri events, invoke→stdin relay.
+- [x] 2.4 Tray: Show/Hide/Quit. Close→minimize. Icon in `icons/`.
 
 ## Phase 3: Svelte 5 Frontend
 
-- [ ] 3.1 `jsonrpc.ts`: typed RPC messages. `ipc.ts` + `events.ts`: typed invoke/listen wrappers.
-- [ ] 3.2 `chat.ts`, `permissions.ts`, `settings.ts`: messages `$state`, pending grants, theme/model.
-- [ ] 3.3 `ChatView.svelte`: bubbles + auto-scroll + typing dots. `ChatInput.svelte`: textarea + send.
-- [ ] 3.4 `OnboardingWizard.svelte`: 3-step, save config, skip if exists.
-- [ ] 3.5 `PermissionDialog.svelte`: modal Allow/Deny. `FilePreview.svelte`: highlight + copy.
-- [ ] 3.6 `+page.svelte`: chat + toggle (Ctrl+Shift+G). `App.svelte`: wizard vs chat, theme.
-- [ ] 3.7 `vite.config.ts`, `tailwind.config.ts`, `app.css` with G-MAN colors.
+- [x] 3.1 `jsonrpc.ts`: typed RPC messages. `ipc.ts` + `events.ts`: typed invoke/listen wrappers.
+- [x] 3.2 `chat.ts`, `permissions.ts`, `settings.ts`: messages `$state`, pending grants, theme/model.
+- [x] 3.3 `ChatView.svelte`: bubbles + auto-scroll + typing dots. `ChatInput.svelte`: textarea + send.
+- [x] 3.4 `OnboardingWizard.svelte`: 3-step, save config, skip if exists.
+- [x] 3.5 `PermissionDialog.svelte`: modal Allow/Deny. `FilePreview.svelte`: highlight + copy.
+- [x] 3.6 `+page.svelte`: chat + toggle (Ctrl+Shift+G). `App.svelte`: wizard vs chat, theme.
+- [x] 3.7 `vite.config.ts`, `tailwind.config.ts`, `app.css` with G-MAN colors.
 
 ## Phase 4: Build + E2E
 
-- [ ] 4.1 `scripts/build.sh`: cross-compile (`amd64`/`arm64`) → `binaries/`. `Makefile`: wire build targets.
-- [ ] 4.2 Bundler: `.AppImage`, `.deb`, `.rpm`. Verify bundle <30MB, launch <3s.
-- [ ] 4.3 Playwright shell: launch, tray, close-to-tray, crash recovery.
-- [ ] 4.4 Playwright transport: request/response, streaming, error, not-ready.
-- [ ] 4.5 Playwright chat+wizard: send+stream, file preview, permission, toggle, first-launch, model-pull.
-- [ ] 4.6 Distribution: AppImage exec, deb install, update check. Update `/README.md`.
+- [x] 4.1 `scripts/build.sh`: cross-compile (`amd64`/`arm64`) → `binaries/`. `Makefile`: wire build targets.
+- [x] 4.2 Bundler: `.AppImage`, `.deb`, `.rpm`. Verify bundle <30MB, launch <3s.
+- [x] 4.3 Playwright shell: launch, tray, close-to-tray, crash recovery.
+- [x] 4.4 Playwright transport: request/response, streaming, error, not-ready.
+- [x] 4.5 Playwright chat+wizard: send+stream, file preview, permission, toggle, first-launch, model-pull.
+- [x] 4.6 Distribution: AppImage exec, deb install, update check. Update `/README.md`.
