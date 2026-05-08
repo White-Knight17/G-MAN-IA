@@ -1,22 +1,13 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
-# G-MAN build script
-# Cross-compiles Go sidecar and builds Tauri app
-
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-TARGET="${1:-linux/amd64}"
-
-echo "==> Building G-MAN v1.0.0 for ${TARGET}"
-
-# Build Go sidecar
-echo "==> Building Go sidecar..."
-cd "$ROOT/core"
-GOOS="${TARGET%/*}" GOARCH="${TARGET#*/}" go build -o "$ROOT/core/gman-server" ./cmd/gman-server/
-
-# Build Tauri app
-echo "==> Building Tauri app..."
-cd "$ROOT/app"
+echo "=== G-MAN v1.0 Build ==="
+echo "Building Go sidecar..."
+cd "$(dirname "$0")/../core"
+go build -o ../app/src-tauri/binaries/gman-core-x86_64-unknown-linux-gnu ./cmd/gman-server
+echo "Building Svelte frontend..."
+cd ../app
+pnpm build
+echo "Building Tauri bundle..."
 pnpm tauri build
-
-echo "==> Build complete"
+echo "=== Build complete ==="

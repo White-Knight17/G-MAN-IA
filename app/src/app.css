@@ -1,0 +1,224 @@
+/* G-MAN v1.0 — Global Styles */
+/* Dark theme (default) + Light theme support via CSS custom properties */
+
+/* ── Tailwind-compatible reset ───────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root,
+.theme-dark {
+  /* Background hierarchy */
+  --gman-bg: #1a1b26;
+  --gman-surface: #24283b;
+  --gman-surface-hover: #2f3348;
+  --gman-overlay: rgba(0, 0, 0, 0.6);
+
+  /* Text */
+  --gman-text: #c0caf5;
+  --gman-text-secondary: #a9b1d6;
+  --gman-muted: #565f89;
+  --gman-muted-hover: #6b7094;
+
+  /* Accent */
+  --gman-accent: #3b82f6;
+  --gman-accent-hover: #2563eb;
+  --gman-accent-subtle: rgba(59, 130, 246, 0.12);
+
+  /* Semantic */
+  --gman-success: #22c55e;
+  --gman-success-subtle: rgba(34, 197, 94, 0.12);
+  --gman-error: #ef4444;
+  --gman-error-subtle: rgba(239, 68, 68, 0.12);
+  --gman-warning: #f59e0b;
+
+  /* Borders */
+  --gman-border: #1e2030;
+  --gman-border-focus: #3b82f6;
+
+  /* Input */
+  --gman-input: #1a1b26;
+  --gman-input-focus: #24283b;
+
+  /* Misc */
+  --gman-radius: 0.5rem;
+  --gman-radius-lg: 0.75rem;
+  --gman-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+:root,
+.theme-dark {
+  color-scheme: dark;
+}
+
+.theme-light {
+  color-scheme: light;
+
+  --gman-bg: #f5f5f5;
+  --gman-surface: #ffffff;
+  --gman-surface-hover: #f0f0f0;
+  --gman-overlay: rgba(0, 0, 0, 0.3);
+
+  --gman-text: #1a1b26;
+  --gman-text-secondary: #333;
+  --gman-muted: #888;
+  --gman-muted-hover: #666;
+
+  --gman-accent: #3b82f6;
+  --gman-accent-hover: #2563eb;
+  --gman-accent-subtle: rgba(59, 130, 246, 0.08);
+
+  --gman-success: #16a34a;
+  --gman-error: #dc2626;
+  --gman-warning: #d97706;
+
+  --gman-border: #ddd;
+  --gman-border-focus: #3b82f6;
+
+  --gman-input: #ffffff;
+
+  --gman-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Global element styles ──────────────────────────────────────────── */
+
+html {
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--gman-bg);
+  color: var(--gman-text);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow: hidden;
+  user-select: none;
+  line-height: 1.5;
+}
+
+/* ── Scrollbar styling ──────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--gman-muted);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gman-muted-hover);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--gman-muted) transparent;
+}
+
+/* ── Selection ──────────────────────────────────────────────────────── */
+
+::selection {
+  background: var(--gman-accent);
+  color: #fff;
+}
+
+/* ── Focus ring ─────────────────────────────────────────────────────── */
+
+:focus-visible {
+  outline: 2px solid var(--gman-accent);
+  outline-offset: 2px;
+}
+
+/* ── Utility classes ────────────────────────────────────────────────── */
+
+.gman-text-muted {
+  color: var(--gman-muted);
+}
+
+.gman-text-accent {
+  color: var(--gman-accent);
+}
+
+.gman-surface {
+  background: var(--gman-surface);
+}
+
+.gman-card {
+  background: var(--gman-surface);
+  border: 1px solid var(--gman-border);
+  border-radius: var(--gman-radius);
+  padding: 0.75rem;
+}
+
+.gman-shadow {
+  box-shadow: var(--gman-shadow);
+}
+
+/* ── Animations ─────────────────────────────────────────────────────── */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.25s ease;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.2s ease;
+}
