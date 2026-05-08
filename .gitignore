@@ -36,3 +36,4 @@ app/node_modules/
 app/src-tauri/binaries/
 app/test-results/
 core/harvey
+app/node_modules/
