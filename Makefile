@@ -35,8 +35,8 @@ test-core:
 test-ui:
 	cd app && pnpm test
 
-# Dev mode
-dev:
+# Dev mode (builds Go sidecar first, then launches Tauri dev server)
+dev: build-core
 	cd app && pnpm tauri dev
 
 # Install dependencies
