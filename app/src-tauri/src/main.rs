@@ -117,12 +117,18 @@ fn main() {
         })
         .setup(|app| {
             // Spawn sidecar on startup
-            let exe_path = app
-                .path()
-                .resource_dir()
-                .unwrap_or_default()
-                .join("binaries")
-                .join("gman-core-x86_64-unknown-linux-gnu");
+            // Try multiple locations: dev mode (CWD), resource dir (production), relative
+            let binary_name = "gman-core-x86_64-unknown-linux-gnu";
+            let candidates = vec![
+                std::env::current_dir().unwrap_or_default().join("binaries").join(binary_name),
+                app.path().resource_dir().unwrap_or_default().join("binaries").join(binary_name),
+            ];
+            
+            let exe_path = candidates.into_iter()
+                .find(|p| p.exists())
+                .unwrap_or_else(|| {
+                    std::env::current_dir().unwrap_or_default().join("binaries").join(binary_name)
+                });
 
             let child = Command::new(&exe_path)
                 .stdin(Stdio::piped())
