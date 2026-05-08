@@ -121,7 +121,8 @@ fn main() {
                 .path()
                 .resource_dir()
                 .unwrap_or_default()
-                .join("gman-server");
+                .join("binaries")
+                .join("gman-core-x86_64-unknown-linux-gnu");
 
             let child = Command::new(&exe_path)
                 .stdin(Stdio::piped())
