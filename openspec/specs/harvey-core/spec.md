@@ -1,12 +1,12 @@
 # Spec: Harvey Core
 
-Local AI assistant for Arch Linux + Hyprland. Offline, single static Go binary with Bubbletea TUI, Ollama-backed ReAct agent loop, and defense-in-depth sandboxed dotfile tools.
+Local AI assistant for Arch Linux + Hyprland. Offline, single static Go binary (or JSON-RPC sidecar for Tauri GUI), Ollama-backed ReAct agent loop, and defense-in-depth sandboxed dotfile tools.
 
 ## Requirements
 
 ### Requirement: ReAct Agent Loop
 
-The system MUST implement a ReAct agent loop that orchestrates user→LLM→tools→LLM cycles. Each message cycle SHALL parse XML tool calls from the LLM response, execute them sandboxed, and feed results back. The loop MUST enforce a 30-second per-step timeout and SHALL retry once on timeout or malformed output. The agent MUST use the configured model and MAY fall back to a secondary model if the primary fails 3 consecutive tool-call parses.
+The system MUST implement a ReAct agent loop that orchestrates user→LLM→tools→LLM cycles. Each message cycle SHALL parse XML tool calls from the LLM response, execute them sandboxed, and feed results back. The loop MUST enforce a 30-second per-step timeout and SHALL retry once on timeout or malformed output. The agent MUST use the configured model and MAY fall back to a secondary model if the primary fails 3 consecutive tool-call parses. The agent SHALL also expose `StreamRun(ctx, input) <-chan StreamEvent` alongside the existing blocking `Run()`; StreamEvent types include `token`, `tool_call`, `tool_result`, `error`, and `done`.
 
 #### Scenario: Happy path tool execution
 
@@ -26,9 +26,15 @@ The system MUST implement a ReAct agent loop that orchestrates user→LLM→tool
 - WHEN the 3rd parse fails
 - THEN the agent SHALL switch to the fallback model and log the transition
 
+#### Scenario: StreamRun emits streaming events
+
+- GIVEN the agent receives "List my config files" via `StreamRun`
+- WHEN the LLM streams token deltas and a tool call
+- THEN the channel emits `StreamEvent{Type:"token", Data:"List"}` followed by subsequent token events, then `StreamEvent{Type:"tool_call", Data:{...}}`, then `StreamEvent{Type:"tool_result", Data:{...}}`, and finally `StreamEvent{Type:"done"}` before closing
+
 ### Requirement: Ollama HTTP Client
 
-The system MUST provide an HTTP client for Ollama `/api/chat` supporting NDJSON streaming responses. The client SHALL verify Ollama connectivity and model availability at startup. On connection errors the client MUST return structured errors; on partial stream errors it SHALL return whatever tokens were received plus an error marker.
+The system MUST provide an HTTP client for Ollama `/api/chat` supporting NDJSON streaming responses with `stream:true`. The client SHALL verify Ollama connectivity and model availability at startup. On connection errors the client MUST return structured errors; on partial stream errors it SHALL return whatever tokens were received plus an error marker. The streamed tokens SHALL be mapped to the `StreamEvent` type for consumption by `StreamRun`.
 
 #### Scenario: Successful streaming chat
 
@@ -47,6 +53,12 @@ The system MUST provide an HTTP client for Ollama `/api/chat` supporting NDJSON 
 - GIVEN the primary model is not pulled
 - WHEN the client performs startup health check
 - THEN it SHALL return `ErrModelNotFound` and suggest `ollama pull`
+
+#### Scenario: Streaming tokens use StreamEvent format
+
+- GIVEN a chat request with `stream:true`
+- WHEN Ollama returns NDJSON lines
+- THEN each delta is wrapped as `StreamEvent{Type:"token", Data:delta}` and written to the channel, with a final `StreamEvent{Type:"done"}`
 
 ### Requirement: Sandboxed Execution
 
@@ -72,13 +84,13 @@ The system MUST run all file and command operations inside a defense-in-depth sa
 
 ### Requirement: Session-Scoped Permissions
 
-The system MUST enforce explicit user grants before any write or list operation on a directory. Grants SHALL be per-directory, per-mode (ro/rw), and expire on session exit. The TUI MUST prompt the user for confirmation when a tool requests access to an ungranted directory. Grants MAY be revoked mid-session.
+The system MUST enforce explicit user grants before any write or list operation on a directory. Grants SHALL be per-directory, per-mode (ro/rw), and expire on session exit. The UI MUST prompt the user for confirmation when a tool requests access to an ungranted directory. Grants MAY be revoked mid-session.
 
 #### Scenario: First-time directory access prompts grant
 
 - GIVEN no grant exists for `~/.config/hypr`
 - WHEN a tool requests write access to that directory
-- THEN the TUI displays a grant confirmation dialog showing the path and mode (rw)
+- THEN the UI displays a grant confirmation dialog showing the path and mode (rw)
 
 #### Scenario: Grant expires on exit
 
@@ -89,34 +101,12 @@ The system MUST enforce explicit user grants before any write or list operation 
 #### Scenario: Revoke mid-session
 
 - GIVEN an active grant for `~/.config/kitty`
-- WHEN the user issues `revoke kitty` via the TUI
+- WHEN the user issues `revoke kitty` via the UI
 - THEN subsequent tool access to that directory triggers a new grant prompt
-
-### Requirement: Bubbletea Terminal UI
-
-The system MUST provide a Bubbletea TUI with a split layout: chat history on the left, file preview/diff on the right. The TUI SHALL render streaming LLM tokens incrementally and display a grant confirmation dialog as a modal. Keyboard navigation MUST support `Tab`/`Shift+Tab` for focus cycling, `Enter` to submit, and `Ctrl+C`/`q` to quit. The layout SHALL reflow correctly on terminal resize.
-
-#### Scenario: Streaming token display
-
-- GIVEN the agent is processing a user message
-- WHEN Ollama streams token deltas
-- THEN each delta is appended to the chat panel's current message with visible cursor
-
-#### Scenario: Terminal resize reflows layout
-
-- GIVEN the TUI is running at 80×24
-- WHEN the terminal resizes to 120×40
-- THEN the split layout reflows proportionally without truncation or glitching
-
-#### Scenario: Grant confirmation modal
-
-- GIVEN a tool requests access to an ungranted directory
-- WHEN the permission model emits a grant request
-- THEN the TUI displays a modal overlay with path, mode, and `[Allow] [Deny]` buttons navigable via arrow keys
 
 ### Requirement: Dotfile Tools
 
-The system MUST provide six sandboxed tools. `read_file` SHALL return file contents; `write_file` SHALL create a `.bak` copy before writing and return a diff; `list_dir` SHALL enumerate directory entries excluding hidden files by default; `run_command` MUST execute only allowlisted commands in Bubblewrap and return stdout/stderr; `check_syntax` SHALL validate config syntax via allowlisted linters; `search_wiki` SHALL grep the local Arch Wiki dump. All tools MUST return structured errors on failure.
+The system MUST provide six sandboxed tools. `read_file` SHALL return file contents; `write_file` SHALL create a `.bak` copy before writing and return a diff; `list_dir` SHALL enumerate directory entries excluding hidden files by default; `run_command` MUST execute only allowlisted commands in Bubblewrap and return stdout/stderr; `check_syntax` SHALL validate config syntax via allowlisted linters; `search_wiki` SHALL grep the local Arch Wiki dump. All tools MUST return structured errors on failure. Tool results SHALL be wrappable as `StreamEvent{Type:"tool_result", Data:...}` for the streaming transport.
 
 #### Scenario: write_file creates backup and diff
 
@@ -147,3 +137,9 @@ The system MUST provide six sandboxed tools. `read_file` SHALL return file conte
 - GIVEN the local Arch Wiki dump is indexed
 - WHEN `search_wiki` queries "hyperland"
 - THEN it SHALL return zero results with a did-you-mean suggestion if a close match exists
+
+#### Scenario: Tool result via StreamEvent
+
+- GIVEN `read_file` is called from `StreamRun`
+- WHEN the tool completes successfully
+- THEN the result is emitted as `StreamEvent{Type:"tool_result", Data:json.Marshal(result)}` to the streaming channel

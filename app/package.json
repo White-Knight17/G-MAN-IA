@@ -28,5 +28,6 @@
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-shell": "^2.0.0"
-  }
+  },
+  "packageManager": "pnpm@10.19.0"
 }
