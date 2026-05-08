@@ -46,7 +46,7 @@
       }
     },
     "externalBin": [
-      "binaries/gman-core-x86_64-unknown-linux-gnu"
+      "binaries/gman-core"
     ],
     "resources": [],
     "copyright": "Gentleman Programming",
