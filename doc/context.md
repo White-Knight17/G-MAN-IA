@@ -6,7 +6,7 @@ For AI agents: read this first when starting a new session on this project.
 
 - Name: G-MAN (Gentleman AI Manager)
 - Repo: github.com/White-Knight17/G-MAN-IA
-- Version: v1.0.0
+- Version: v2.0.0
 - Module: github.com/gentleman/gman
 - Stack: Go 1.26 + Rust 1.95 + Svelte 5 + TypeScript
 

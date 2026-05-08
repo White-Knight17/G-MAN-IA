@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.0.0 (2026-05-08) — Desktop Revolution
+
+### 💥 BREAKING: TUI → Desktop GUI
+
+G-MAN leaves the terminal. The Bubbletea TUI is replaced by a native desktop app with Tauri v2 + Svelte 5. The Go core continues as a JSON-RPC 2.0 sidecar over stdin/stdout.
+
 ## v1.0.0 (2026-05-08) — Desktop Assistant
 
 ### 🎉 G-MAN goes GUI
