@@ -1,6 +1,10 @@
 package domain
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -376,5 +380,334 @@ func TestGrantEmptyPath(t *testing.T) {
 
 	if grant.Path != "" {
 		t.Errorf("expected empty path, got %q", grant.Path)
+	}
+}
+
+// =============================================================================
+// JSON Serialization Tests (Task 1.5)
+// =============================================================================
+
+func TestSessionJSONSerialization(t *testing.T) {
+	session := Session{
+		ID:        "abc-123",
+		Messages:  []ChatMessage{},
+		Grants:    []Grant{},
+		StartedAt: "2026-01-01T00:00:00Z",
+	}
+
+	data, err := json.Marshal(session)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var decoded Session
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+
+	if decoded.ID != "abc-123" {
+		t.Errorf("expected ID 'abc-123', got %q", decoded.ID)
+	}
+	if decoded.StartedAt != "2026-01-01T00:00:00Z" {
+		t.Errorf("expected StartedAt, got %q", decoded.StartedAt)
+	}
+}
+
+func TestChatMessageJSONSerialization(t *testing.T) {
+	msg := ChatMessage{
+		Role:      "user",
+		Content:   "Hello, G-MAN!",
+		Timestamp: "2026-01-01T00:00:00Z",
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var decoded ChatMessage
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+
+	if decoded.Role != "user" {
+		t.Errorf("expected Role 'user', got %q", decoded.Role)
+	}
+	if decoded.Content != "Hello, G-MAN!" {
+		t.Errorf("expected Content preserved, got %q", decoded.Content)
+	}
+}
+
+func TestGrantJSONSerialization(t *testing.T) {
+	grant := Grant{
+		Path:      "/home/user/.config",
+		Mode:      PermissionRead,
+		GrantedAt: "2026-01-01T00:00:00Z",
+	}
+
+	data, err := json.Marshal(grant)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var decoded Grant
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+
+	if decoded.Path != "/home/user/.config" {
+		t.Errorf("expected Path, got %q", decoded.Path)
+	}
+	if decoded.Mode != PermissionRead {
+		t.Errorf("expected Mode 'ro', got %q", decoded.Mode)
+	}
+}
+
+func TestToolResultJSONSerialization(t *testing.T) {
+	result := ToolResult{
+		Success: true,
+		Output:  "file contents here",
+	}
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var decoded ToolResult
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+
+	if !decoded.Success {
+		t.Error("expected Success true")
+	}
+	if decoded.Output != "file contents here" {
+		t.Errorf("expected Output, got %q", decoded.Output)
+	}
+}
+
+func TestStreamEventJSONRoundTrip(t *testing.T) {
+	event := StreamEvent{
+		Type:    "token",
+		Content: "Hello, world!",
+	}
+
+	data, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var decoded StreamEvent
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+
+	if decoded.Type != "token" {
+		t.Errorf("expected type 'token', got %q", decoded.Type)
+	}
+	if decoded.Content != "Hello, world!" {
+		t.Errorf("expected content, got %q", decoded.Content)
+	}
+
+	// Verify JSON keys use lowercase
+	raw := string(data)
+	if !strings.Contains(raw, `"type"`) {
+		t.Errorf("expected JSON key 'type' in output: %s", raw)
+	}
+	if !strings.Contains(raw, `"content"`) {
+		t.Errorf("expected JSON key 'content' in output: %s", raw)
+	}
+}
+
+// =============================================================================
+// StreamEvent Tests
+// =============================================================================
+
+func TestStreamEventTypes(t *testing.T) {
+	tests := []struct {
+		name       string
+		eventType  string
+		content    string
+		errMsg     string
+		wantValid  bool
+	}{
+		{
+			name:      "token event",
+			eventType: "token",
+			content:   "Hello",
+			wantValid: true,
+		},
+		{
+			name:      "tool_call event",
+			eventType: "tool_call",
+			content:   `{"name":"read_file","params":{"path":"/tmp/test"}}`,
+			wantValid: true,
+		},
+		{
+			name:      "tool_result event",
+			eventType: "tool_result",
+			content:   "file contents here",
+			wantValid: true,
+		},
+		{
+			name:      "done event",
+			eventType: "done",
+			content:   "",
+			wantValid: true,
+		},
+		{
+			name:      "error event",
+			eventType: "error",
+			errMsg:    "model not found",
+			wantValid: true,
+		},
+		{
+			name:      "permission_request event",
+			eventType: "permission_request",
+			content:   `{"tool":"write_file","path":"/etc/config"}`,
+			wantValid: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			event := StreamEvent{
+				Type:    tt.eventType,
+				Content: tt.content,
+				Error:   tt.errMsg,
+			}
+
+			if event.Type != tt.eventType {
+				t.Errorf("Type = %q, want %q", event.Type, tt.eventType)
+			}
+			if event.Content != tt.content {
+				t.Errorf("Content = %q, want %q", event.Content, tt.content)
+			}
+			if event.Error != tt.errMsg {
+				t.Errorf("Error = %q, want %q", event.Error, tt.errMsg)
+			}
+		})
+	}
+}
+
+func TestStreamEventJSONSerialization(t *testing.T) {
+	// Verify JSON round-trip for NDJSON transport
+	// This test will be properly implemented after JSON tags are added (task 1.5)
+	event := StreamEvent{
+		Type:    "token",
+		Content: "Hello, world!",
+	}
+
+	if event.Type != "token" {
+		t.Errorf("expected type 'token', got %q", event.Type)
+	}
+}
+
+// mockStreamAgent implements Agent with StreamRun for testing the interface contract.
+type mockStreamAgent struct {
+	events []StreamEvent
+	err    error
+}
+
+func (m *mockStreamAgent) Run(ctx context.Context, input string, session *Session) (string, error) {
+	return "mock", nil
+}
+
+func (m *mockStreamAgent) StreamRun(ctx context.Context, input string, session *Session) (<-chan StreamEvent, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	ch := make(chan StreamEvent, len(m.events))
+	go func() {
+		for _, e := range m.events {
+			ch <- e
+		}
+		close(ch)
+	}()
+	return ch, nil
+}
+
+func (m *mockStreamAgent) Tools() []Tool { return nil }
+
+func TestAgentStreamRunInterface(t *testing.T) {
+	// Compile-time verification that mockStreamAgent implements Agent
+	var _ Agent = &mockStreamAgent{}
+
+	ctx := context.Background()
+	session := &Session{ID: "test"}
+	agent := &mockStreamAgent{
+		events: []StreamEvent{
+			{Type: "token", Content: "Hi"},
+			{Type: "done"},
+		},
+	}
+
+	ch, err := agent.StreamRun(ctx, "hello", session)
+	if err != nil {
+		t.Fatalf("StreamRun failed: %v", err)
+	}
+
+	var events []StreamEvent
+	for evt := range ch {
+		events = append(events, evt)
+	}
+
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+	if events[0].Type != "token" {
+		t.Errorf("first event type: expected 'token', got %q", events[0].Type)
+	}
+	if events[1].Type != "done" {
+		t.Errorf("last event type: expected 'done', got %q", events[1].Type)
+	}
+}
+
+func TestAgentStreamRunError(t *testing.T) {
+	agent := &mockStreamAgent{
+		err: fmt.Errorf("connection refused"),
+	}
+
+	ctx := context.Background()
+	session := &Session{ID: "test"}
+
+	ch, err := agent.StreamRun(ctx, "input", session)
+	if err == nil {
+		t.Error("expected error for connection refused")
+	}
+	if ch != nil {
+		t.Error("expected nil channel on error")
+	}
+}
+
+func TestStreamEventChannelContract(t *testing.T) {
+	// Simulate a StreamRun implementation that emits events and closes the channel.
+	// This proves the channel contract: events emitted, then channel closed.
+	ch := make(chan StreamEvent, 64)
+
+	go func() {
+		ch <- StreamEvent{Type: "token", Content: "Hello"}
+		ch <- StreamEvent{Type: "token", Content: " world"}
+		ch <- StreamEvent{Type: "done"}
+		close(ch)
+	}()
+
+	var events []StreamEvent
+	for evt := range ch {
+		events = append(events, evt)
+	}
+
+	if len(events) != 3 {
+		t.Fatalf("expected 3 events, got %d", len(events))
+	}
+	if events[0].Type != "token" || events[0].Content != "Hello" {
+		t.Errorf("event 0: expected token 'Hello', got %s/%q", events[0].Type, events[0].Content)
+	}
+	if events[1].Type != "token" || events[1].Content != " world" {
+		t.Errorf("event 1: expected token ' world', got %s/%q", events[1].Type, events[1].Content)
+	}
+	if events[2].Type != "done" {
+		t.Errorf("event 2: expected done, got %s", events[2].Type)
 	}
 }

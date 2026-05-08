@@ -42,12 +42,12 @@ type PermissionRepository interface {
 // Grants are session-scoped and discarded on process exit.
 type Grant struct {
 	// Path is the absolute, resolved directory path that this grant covers.
-	Path string
+	Path string `json:"path"`
 
 	// Mode is the access level granted (ro or rw).
-	Mode PermissionMode
+	Mode PermissionMode `json:"mode"`
 
 	// GrantedAt is the timestamp when this grant was created.
 	// Used for audit and display purposes in the TUI.
-	GrantedAt string // ISO 8601 timestamp
+	GrantedAt string `json:"granted_at"` // ISO 8601 timestamp
 }

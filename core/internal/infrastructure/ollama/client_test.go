@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gentleman/gman/internal/domain"
 	"github.com/gentleman/gman/internal/infrastructure/ollama"
@@ -403,5 +404,210 @@ func TestOllamaClient_ContextCancellation(t *testing.T) {
 	_, err := client.Run(ctx, "Hi!", fakeSession())
 	if err == nil {
 		t.Error("expected error for cancelled context")
+	}
+}
+
+// =============================================================================
+// StreamRun Tests
+// =============================================================================
+
+func TestOllamaClient_StreamRun_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/chat" {
+			http.NotFound(w, r)
+			return
+		}
+
+		var reqBody struct {
+			Stream bool `json:"stream"`
+		}
+		json.NewDecoder(r.Body).Decode(&reqBody)
+		if !reqBody.Stream {
+			t.Error("StreamRun should set stream: true")
+		}
+
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		// Emit NDJSON chunks
+		chunks := []string{
+			`{"model":"test","message":{"role":"assistant","content":"Hello"}}`,
+			`{"model":"test","message":{"role":"assistant","content":" world"}}`,
+			`{"model":"test","message":{"role":"assistant","content":"!"}}`,
+			`{"model":"test","done":true}`,
+		}
+		for _, chunk := range chunks {
+			w.Write([]byte(chunk + "\n"))
+			w.(http.Flusher).Flush()
+		}
+	}))
+	defer server.Close()
+
+	client := ollama.NewOllamaClient("test-model", nil, server.URL)
+	ctx := context.Background()
+
+	ch, err := client.StreamRun(ctx, "Hi!", fakeSession())
+	if err != nil {
+		t.Fatalf("StreamRun failed: %v", err)
+	}
+
+	var events []domain.StreamEvent
+	for evt := range ch {
+		events = append(events, evt)
+	}
+
+	if len(events) < 4 {
+		t.Fatalf("expected at least 4 events (3 tokens + done), got %d", len(events))
+	}
+
+	// Verify token events
+	tokenCount := 0
+	doneCount := 0
+	for _, evt := range events {
+		switch evt.Type {
+		case "token":
+			tokenCount++
+		case "done":
+			doneCount++
+		case "error":
+			t.Errorf("unexpected error event: %s", evt.Error)
+		}
+	}
+
+	if tokenCount != 3 {
+		t.Errorf("expected 3 token events, got %d", tokenCount)
+	}
+	if doneCount != 1 {
+		t.Errorf("expected 1 done event, got %d", doneCount)
+	}
+}
+
+func TestOllamaClient_StreamRun_NoStreamingFallback(t *testing.T) {
+	// If stream is not supported (non-streaming response), fall back
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var reqBody struct {
+			Stream bool `json:"stream"`
+		}
+		json.NewDecoder(r.Body).Decode(&reqBody)
+
+		// Return non-streaming response even though stream was requested
+		if reqBody.Stream {
+			resp := map[string]interface{}{
+				"model": "test",
+				"message": map[string]string{
+					"role":    "assistant",
+					"content": "Full response without streaming",
+				},
+				"done": true,
+			}
+			json.NewEncoder(w).Encode(resp)
+		} else {
+			resp := map[string]interface{}{
+				"message": map[string]string{"role": "assistant", "content": "OK"},
+			}
+			json.NewEncoder(w).Encode(resp)
+		}
+	}))
+	defer server.Close()
+
+	client := ollama.NewOllamaClient("test-model", nil, server.URL)
+	ctx := context.Background()
+
+	ch, err := client.StreamRun(ctx, "Hi!", fakeSession())
+	if err != nil {
+		t.Fatalf("StreamRun failed: %v", err)
+	}
+
+	var lastEvent domain.StreamEvent
+	for evt := range ch {
+		lastEvent = evt
+	}
+
+	if lastEvent.Type != "done" {
+		t.Errorf("expected last event to be 'done', got %q", lastEvent.Type)
+	}
+}
+
+func TestOllamaClient_StreamRun_Error(t *testing.T) {
+	// Use a server that immediately returns 503 with a minimal body.
+	// The handler reads and discards the request body to prevent hangs.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		// Write minimal body and close to signal end
+		w.Write([]byte(`{"error":"service unavailable"}`))
+	}))
+	defer server.Close()
+
+	client := ollama.NewOllamaClient("test-model", nil, server.URL)
+	ctx := context.Background()
+
+	ch, err := client.StreamRun(ctx, "Hi!", fakeSession())
+	if err != nil {
+		t.Fatalf("StreamRun setup error: %v", err)
+	}
+
+	// Should receive an error event
+	events := collectEvents(t, ch, 2*time.Second)
+	if len(events) == 0 {
+		t.Fatal("expected at least one event")
+	}
+
+	hasError := false
+	for _, evt := range events {
+		if evt.Type == "error" {
+			hasError = true
+			break
+		}
+	}
+	if !hasError {
+		t.Errorf("expected an error event, got: %+v", events)
+	}
+}
+
+func TestOllamaClient_StreamRun_ContextCancellation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Slow response that should be cancelled
+		select {
+		case <-time.After(5 * time.Second):
+		case <-r.Context().Done():
+			return
+		}
+	}))
+	defer server.Close()
+
+	client := ollama.NewOllamaClient("test-model", nil, server.URL)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	ch, err := client.StreamRun(ctx, "Hi!", fakeSession())
+	if err != nil {
+		// Error from StreamRun itself is also acceptable (context deadline)
+		return
+	}
+
+	// If no setup error, expect an error event on the channel
+	if ch == nil {
+		t.Fatal("expected non-nil channel")
+	}
+
+	events := collectEvents(t, ch, 5*time.Second)
+	if len(events) == 0 {
+		t.Error("expected at least one event (error or done)")
+	}
+}
+
+// collectEvents reads all events from a channel with a timeout.
+func collectEvents(t *testing.T, ch <-chan domain.StreamEvent, timeout time.Duration) []domain.StreamEvent {
+	t.Helper()
+	var events []domain.StreamEvent
+	deadline := time.After(timeout)
+	for {
+		select {
+		case evt, ok := <-ch:
+			if !ok {
+				return events
+			}
+			events = append(events, evt)
+		case <-deadline:
+			return events
+		}
 	}
 }

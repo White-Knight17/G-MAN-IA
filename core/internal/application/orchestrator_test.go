@@ -29,6 +29,21 @@ func (a *stubAgent) Run(ctx context.Context, input string, session *domain.Sessi
 	return resp, nil
 }
 
+func (a *stubAgent) StreamRun(ctx context.Context, input string, session *domain.Session) (<-chan domain.StreamEvent, error) {
+	ch := make(chan domain.StreamEvent, 64)
+	go func() {
+		result, err := a.Run(ctx, input, session)
+		if err != nil {
+			ch <- domain.StreamEvent{Type: "error", Error: err.Error()}
+		} else {
+			ch <- domain.StreamEvent{Type: "token", Content: result}
+		}
+		ch <- domain.StreamEvent{Type: "done"}
+		close(ch)
+	}()
+	return ch, nil
+}
+
 func (a *stubAgent) Tools() []domain.Tool { return a.tools }
 
 func TestChatOrchestrator_SimpleResponse_NoToolCall(t *testing.T) {
@@ -220,5 +235,183 @@ func TestChatOrchestrator_ToolErrorRecovery(t *testing.T) {
 
 	if !strings.Contains(response, "doesn't exist") {
 		t.Errorf("expected agent to handle error gracefully, got: %q", response)
+	}
+}
+
+// =============================================================================
+// HandleMessageStream Tests
+// =============================================================================
+
+// streamStubAgent emits predefined StreamEvents.
+type streamStubAgent struct {
+	events []domain.StreamEvent
+	err    error
+}
+
+func (a *streamStubAgent) Run(ctx context.Context, input string, session *domain.Session) (string, error) {
+	return "not used", nil
+}
+
+func (a *streamStubAgent) StreamRun(ctx context.Context, input string, session *domain.Session) (<-chan domain.StreamEvent, error) {
+	if a.err != nil {
+		return nil, a.err
+	}
+	ch := make(chan domain.StreamEvent, len(a.events))
+	go func() {
+		for _, e := range a.events {
+			ch <- e
+		}
+		close(ch)
+	}()
+	return ch, nil
+}
+
+func (a *streamStubAgent) Tools() []domain.Tool { return nil }
+
+func TestChatOrchestrator_HandleMessageStream_SimpleResponse(t *testing.T) {
+	agent := &streamStubAgent{
+		events: []domain.StreamEvent{
+			{Type: "token", Content: "Hello"},
+			{Type: "token", Content: " world"},
+			{Type: "done"},
+		},
+	}
+
+	perms := newStubPermissionRepo()
+	tools := []domain.Tool{}
+	sandbox := &stubSandbox{}
+	executor := application.NewToolExecutor(tools, sandbox, perms)
+	grantMgr := application.NewGrantManager(perms)
+
+	orch := application.NewChatOrchestrator(agent, executor, grantMgr)
+
+	session := &domain.Session{ID: "test"}
+	ch, err := orch.HandleMessageStream(context.Background(), session, "Hi!")
+	if err != nil {
+		t.Fatalf("HandleMessageStream failed: %v", err)
+	}
+
+	var events []domain.StreamEvent
+	for evt := range ch {
+		events = append(events, evt)
+	}
+
+	// Should have token events + done event
+	if len(events) < 3 {
+		t.Fatalf("expected at least 3 events, got %d", len(events))
+	}
+
+	hasDone := false
+	hasToken := false
+	for _, evt := range events {
+		if evt.Type == "done" {
+			hasDone = true
+		}
+		if evt.Type == "token" {
+			hasToken = true
+		}
+	}
+	if !hasToken {
+		t.Error("expected at least one token event")
+	}
+	if !hasDone {
+		t.Error("expected a done event")
+	}
+}
+
+func TestChatOrchestrator_HandleMessageStream_WithToolCall(t *testing.T) {
+	// Agent emits: tool_call → tool_result should be intercepted
+	agent := &streamStubAgent{
+		events: []domain.StreamEvent{
+			{Type: "token", Content: "Let me check that file."},
+			{Type: "tool_call", Content: `READ: /home/user/.config/test`},
+			{Type: "token", Content: "The file contains config data."},
+			{Type: "done"},
+		},
+	}
+
+	perms := newStubPermissionRepo()
+	perms.Grant("/home/user/.config/test", domain.PermissionRead)
+
+	tools := []domain.Tool{
+		&stubTool{
+			name:        "read_file",
+			description: "Reads a file",
+			schema:      `<tool_call><name>read_file</name><path>/path</path></tool_call>`,
+			execute: func(ctx context.Context, params map[string]string) (domain.ToolResult, error) {
+				return domain.ToolResult{Success: true, Output: "config content"}, nil
+			},
+		},
+	}
+
+	sandbox := &stubSandbox{}
+	grantMgr := application.NewGrantManager(perms)
+	executor := application.NewToolExecutor(tools, sandbox, perms)
+
+	orch := application.NewChatOrchestrator(agent, executor, grantMgr)
+
+	session := &domain.Session{ID: "test"}
+	ch, err := orch.HandleMessageStream(context.Background(), session, "Check my config")
+	if err != nil {
+		t.Fatalf("HandleMessageStream failed: %v", err)
+	}
+
+	var events []domain.StreamEvent
+	for evt := range ch {
+		events = append(events, evt)
+	}
+
+	// Should have token, tool_call, tool_result, more token, done
+	hasToolResult := false
+	hasDone := false
+	for _, evt := range events {
+		if evt.Type == "tool_result" {
+			hasToolResult = true
+		}
+		if evt.Type == "done" {
+			hasDone = true
+		}
+	}
+	if !hasToolResult {
+		t.Error("expected a tool_result event")
+	}
+	if !hasDone {
+		t.Error("expected a done event")
+	}
+}
+
+func TestChatOrchestrator_HandleMessageStream_NoToolCommand(t *testing.T) {
+	// Agent emits plain text response without tool commands
+	agent := &streamStubAgent{
+		events: []domain.StreamEvent{
+			{Type: "token", Content: "I don't need any tools for this."},
+			{Type: "done"},
+		},
+	}
+
+	perms := newStubPermissionRepo()
+	tools := []domain.Tool{}
+	sandbox := &stubSandbox{}
+	executor := application.NewToolExecutor(tools, sandbox, perms)
+	grantMgr := application.NewGrantManager(perms)
+
+	orch := application.NewChatOrchestrator(agent, executor, grantMgr)
+
+	session := &domain.Session{ID: "test"}
+	ch, err := orch.HandleMessageStream(context.Background(), session, "What time is it?")
+	if err != nil {
+		t.Fatalf("HandleMessageStream failed: %v", err)
+	}
+
+	var events []domain.StreamEvent
+	for evt := range ch {
+		events = append(events, evt)
+	}
+
+	// Should have tokens and done (no tool_result since no tool was called)
+	for _, evt := range events {
+		if evt.Type == "tool_result" {
+			t.Error("expected no tool_result event for non-tool response")
+		}
 	}
 }

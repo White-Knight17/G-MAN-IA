@@ -197,6 +197,89 @@ func formatToolResult(result domain.ToolResult) string {
 	return fmt.Sprintf("Tool error: %s", result.Error)
 }
 
+// HandleMessageStream processes a user message through the full ReAct agent
+// loop with streaming output. It emits StreamEvents through the returned
+// channel, passing through agent tokens and intercepting tool calls for
+// execution.
+//
+// The channel is closed when the streaming loop completes or the maximum
+// number of iterations is reached.
+func (o *ChatOrchestrator) HandleMessageStream(ctx context.Context, session *domain.Session, userInput string) (<-chan domain.StreamEvent, error) {
+	// Add user message to session history
+	session.Messages = append(session.Messages, domain.ChatMessage{
+		Role:      "user",
+		Content:   userInput,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	})
+
+	ch := make(chan domain.StreamEvent, 64)
+
+	go func() {
+		defer close(ch)
+
+		for i := 0; i < o.maxIterations; i++ {
+			select {
+			case <-ctx.Done():
+				ch <- domain.StreamEvent{Type: "error", Error: ctx.Err().Error()}
+				return
+			default:
+			}
+
+			// Call agent StreamRun
+			events, err := o.agent.StreamRun(ctx, userInput, session)
+			if err != nil {
+				ch <- domain.StreamEvent{Type: "error", Error: err.Error()}
+				return
+			}
+
+			var fullResponse string
+			var toolCallSeen bool
+
+			for evt := range events {
+				switch evt.Type {
+				case "token":
+					fullResponse += evt.Content
+					ch <- evt
+				case "tool_call":
+					toolCallSeen = true
+					ch <- evt
+
+					// Execute the tool and emit tool_result
+					result, execErr := o.executor.Execute(ctx, session, evt.Content)
+					if execErr != nil {
+						ch <- domain.StreamEvent{
+							Type:    "tool_result",
+							Content: result.Error,
+							Error:   execErr.Error(),
+						}
+					} else {
+						ch <- domain.StreamEvent{
+							Type:    "tool_result",
+							Content: result.Output,
+						}
+					}
+				case "done":
+					ch <- evt
+				case "error":
+					ch <- evt
+				}
+			}
+
+			// If no tool was called and we got tokens, this was the final response
+			if !toolCallSeen && fullResponse != "" {
+				return
+			}
+
+			// Reset input for next iteration (session already has tool/result messages)
+			userInput = ""
+		}
+
+		ch <- domain.StreamEvent{Type: "error", Error: "max iterations reached"}
+	}()
+
+	return ch, nil
+}
+
 // Agent returns the primary agent for inspection or health checks.
 func (o *ChatOrchestrator) Agent() domain.Agent {
 	return o.agent

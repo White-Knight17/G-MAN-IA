@@ -4,10 +4,12 @@
 package ollama
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -71,6 +73,115 @@ func NewOllamaClient(model string, tools []domain.Tool, baseURL string) *OllamaC
 		tools:    tools,
 		baseURL:  strings.TrimRight(baseURL, "/"),
 		httpClient: &http.Client{Timeout: DefaultTimeout},
+	}
+}
+
+// StreamRun executes the agent loop with streaming output.
+// It sends a streaming chat request to Ollama (stream: true), reads the
+// NDJSON response body line-by-line, and emits StreamEvents containing
+// token deltas. The channel is closed when the stream ends or on error.
+//
+// Implements domain.Agent.StreamRun().
+func (c *OllamaClient) StreamRun(ctx context.Context, input string, session *domain.Session) (<-chan domain.StreamEvent, error) {
+	messages := c.buildMessages(input, session)
+
+	body := chatRequest{
+		Model:    c.model,
+		Messages: messages,
+		Stream:   true,
+	}
+
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("ollama: marshal stream request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/chat", bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("ollama: create stream request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("ollama: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		// Drain and close body to allow connection reuse
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		ch := make(chan domain.StreamEvent, 2)
+		ch <- domain.StreamEvent{
+			Type:  "error",
+			Error: fmt.Sprintf("ollama: API returned status %d", resp.StatusCode),
+		}
+		close(ch)
+		return ch, nil
+	}
+
+	ch := make(chan domain.StreamEvent, 64)
+	go c.readStream(ctx, resp.Body, ch)
+	return ch, nil
+}
+
+// readStream reads NDJSON lines from the Ollama streaming response body
+// and emits StreamEvents on the channel. It detects when a line is the
+// final "done" message and closes the channel.
+func (c *OllamaClient) readStream(ctx context.Context, body io.ReadCloser, ch chan<- domain.StreamEvent) {
+	defer body.Close()
+	defer close(ch)
+
+	scanner := bufio.NewScanner(body)
+	// Ollama streaming responses can be large; set adequate buffer
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 10*1024*1024)
+
+	for scanner.Scan() {
+		select {
+		case <-ctx.Done():
+			ch <- domain.StreamEvent{Type: "error", Error: ctx.Err().Error()}
+			return
+		default:
+		}
+
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var streamResp struct {
+			Message struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"message"`
+			Done  bool   `json:"done"`
+			Error string `json:"error,omitempty"`
+		}
+
+		if err := json.Unmarshal(line, &streamResp); err != nil {
+			// Skip malformed lines, but don't crash
+			continue
+		}
+
+		if streamResp.Error != "" {
+			ch <- domain.StreamEvent{Type: "error", Error: streamResp.Error}
+			return
+		}
+
+		if streamResp.Done {
+			ch <- domain.StreamEvent{Type: "done"}
+			return
+		}
+
+		content := streamResp.Message.Content
+		if content != "" {
+			ch <- domain.StreamEvent{Type: "token", Content: content}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		ch <- domain.StreamEvent{Type: "error", Error: fmt.Sprintf("ollama: stream read error: %v", err)}
 	}
 }
 

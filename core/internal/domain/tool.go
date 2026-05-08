@@ -34,7 +34,7 @@ type Tool interface {
 // On success, Output contains the result and Error is empty.
 // On failure, Error contains the error description.
 type ToolResult struct {
-	Success bool   // whether the tool executed successfully
-	Output  string // result content on success
-	Error   string // error description on failure
+	Success bool   `json:"success"` // whether the tool executed successfully
+	Output  string `json:"output"`  // result content on success
+	Error   string `json:"error"`   // error description on failure
 }
