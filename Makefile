@@ -5,7 +5,7 @@ build-core:
 	cd core && go build -o ../app/src-tauri/binaries/gman-core-x86_64-unknown-linux-gnu ./cmd/gman-server
 
 # Build Svelte frontend
-build-ui:
+build-ui: install
 	cd app && pnpm build
 
 # Full build
