@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.0.0](https://github.com/White-Knight17/G-MAN-IA/compare/v1.0.0...v2.0.0) (2026-05-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* Release Please configuration enforces v1.0.0 baseline. Adds bump-minor-pre-major and release-as: 1.0.0 to prevent 0.x drift.
+
+### Features
+
+* add CHANGELOG, ROADMAP and session context for AI agents ([4349b51](https://github.com/White-Knight17/G-MAN-IA/commit/4349b5176378dd60f28ce30cb7316f211842a3ca))
+* force Release Please to v1.0.0 with config ([718aed7](https://github.com/White-Knight17/G-MAN-IA/commit/718aed74cf9e73aa5022cdd8498fce57f51efc4d))
+
+
+### Bug Fixes
+
+* **build:** add pnpm install to CI build job and Makefile ([5f2cfa6](https://github.com/White-Knight17/G-MAN-IA/commit/5f2cfa69e3c31c433aabcf26f893b90d7109db22))
+* **build:** make dev depends on build-core ([f2688b1](https://github.com/White-Knight17/G-MAN-IA/commit/f2688b11573b852767cf9ba79dc339a16e358e23))
+* **build:** remove target triple from externalBin name ([81389ef](https://github.com/White-Knight17/G-MAN-IA/commit/81389ef04e64b0eed27e69240d4e689a52e28c11))
+* **ci:** add Tauri system deps and pnpm version to CI workflow ([55a1823](https://github.com/White-Knight17/G-MAN-IA/commit/55a1823c8ab682ed1c3dcf17146946fe1881a733))
+* **tauri:** correct sidecar binary path in dev mode ([ccb5d8e](https://github.com/White-Knight17/G-MAN-IA/commit/ccb5d8e8ea5e4e9a1cbf13c72209719ec65d0efd))
+* **tauri:** multi-path sidecar discovery + CI Go build ([71985fe](https://github.com/White-Knight17/G-MAN-IA/commit/71985fe14768d40e91dfa480c1e22127088412f8))
+
 ## [1.0.0](https://github.com/White-Knight17/G-MAN-IA/compare/v0.10.1...v1.0.0) (2026-05-08)
 
 
