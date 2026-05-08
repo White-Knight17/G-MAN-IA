@@ -30,3 +30,4 @@ Thumbs.db
 # Dependencies (go.sum is committed, not ignored)
 
 core/gman-server
+app/src-tauri/target/
