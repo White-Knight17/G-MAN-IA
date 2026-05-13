@@ -16,7 +16,11 @@
         "height": 700,
         "decorations": false,
         "alwaysOnTop": false,
-        "visible": true
+        "visible": true,
+        "resizable": true,
+        "minWidth": 48,
+        "minHeight": 200,
+        "maxWidth": 600
       }
     ],
     "trayIcon": {
