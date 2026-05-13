@@ -3,10 +3,23 @@ import { invoke } from "@tauri-apps/api/core";
 
 // Module under test — does NOT exist yet (RED)
 import { createChatStore, type Message } from "../stores/chat.svelte";
+import { listModels, pullModel, getConfig, setConfig } from "../rpc";
+import * as rpc from "../rpc";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
+
+vi.mock("../rpc", async () => {
+  const actual = await vi.importActual("../rpc");
+  return {
+    ...actual,
+    listModels: vi.fn(),
+    pullModel: vi.fn(),
+    getConfig: vi.fn(),
+    setConfig: vi.fn(),
+  };
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -337,5 +350,92 @@ describe("createChatStore", () => {
     expect(userMsgs[1].content).toBe("Q2");
     expect(assistantMsgs[0].content).toBe("First");
     expect(assistantMsgs[1].content).toBe("Second");
+  });
+});
+
+// ============================================================================
+// executeCommand tests
+// ============================================================================
+
+describe("executeCommand", () => {
+  it("clears messages on /clear command", async () => {
+    const store = createChatStore();
+
+    // Add a message first
+    const mockChunk = [
+      JSON.stringify({
+        jsonrpc: "2.0",
+        method: "stream.token",
+        params: { token: "ok", session_id: "abc" },
+      }),
+      JSON.stringify({
+        jsonrpc: "2.0",
+        method: "stream.done",
+        params: { session_id: "abc" },
+      }),
+    ].join("\n");
+
+    vi.mocked(invoke).mockResolvedValueOnce(mockChunk);
+    await store.sendMessage("test");
+    expect(store.messages.length).toBeGreaterThan(0);
+
+    // Now execute /clear
+    await store.executeCommand("/clear");
+
+    expect(store.messages).toEqual([]);
+  });
+
+  it("adds command-result message for /help", async () => {
+    const store = createChatStore();
+
+    await store.executeCommand("/help");
+
+    const cmdMsg = store.messages.find((m) => m.role === "command-result");
+    expect(cmdMsg).toBeDefined();
+    expect(cmdMsg!.content).toContain("/help");
+    expect(cmdMsg!.content).toContain("/clear");
+    expect(cmdMsg!.content).toContain("/model");
+  });
+
+  it("adds command-result message for /model", async () => {
+    const store = createChatStore();
+
+    vi.mocked(getConfig).mockResolvedValueOnce({
+      provider: "ollama",
+      model: "llama3.2:3b",
+      has_api_key: false,
+      theme: "dark",
+      window: { mode: "floating" },
+    });
+
+    vi.mocked(listModels).mockResolvedValueOnce([
+      { name: "llama3.2:3b", size: "2.0 GB", digest: "abc" },
+    ]);
+
+    await store.executeCommand("/model");
+
+    const cmdMsg = store.messages.find((m) => m.role === "command-result");
+    expect(cmdMsg).toBeDefined();
+    expect(cmdMsg!.content).toContain("llama3.2:3b");
+  });
+
+  it("adds error command-result for unknown command", async () => {
+    const store = createChatStore();
+
+    await store.executeCommand("/unknown");
+
+    const cmdMsg = store.messages.find((m) => m.role === "command-result");
+    expect(cmdMsg).toBeDefined();
+    expect(cmdMsg!.content).toContain("Unknown command");
+    expect(cmdMsg!.content).toContain("/unknown");
+  });
+
+  it("sets isProcessingCommand during command execution", async () => {
+    const store = createChatStore();
+
+    // /clear is synchronous, so we check before and after
+    expect(store.isProcessingCommand).toBe(false);
+    await store.executeCommand("/clear");
+    expect(store.isProcessingCommand).toBe(false);
   });
 });

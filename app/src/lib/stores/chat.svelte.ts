@@ -1,11 +1,11 @@
 // G-MAN v1.0 — Chat Store (Svelte 5 runes)
 // Manages message history, streaming state, and RPC integration
 
-import { streamChat } from "../rpc";
+import { streamChat, listModels, getConfig } from "../rpc";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type MessageRole = "user" | "assistant" | "system" | "tool";
+export type MessageRole = "user" | "assistant" | "system" | "tool" | "command-result";
 
 export type Message = {
   id: string;
@@ -27,6 +27,7 @@ function nextMsgId(): string {
 export function createChatStore() {
   let messages = $state<Message[]>([]);
   let isThinking = $state(false);
+  let isProcessingCommand = $state(false);
 
   async function sendMessage(text: string) {
     // Add user message immediately
@@ -143,6 +144,84 @@ export function createChatStore() {
     isThinking = false;
   }
 
+  function addCommandResult(content: string, success: boolean = true) {
+    const cmdMsg: Message = {
+      id: nextMsgId(),
+      role: "command-result",
+      content,
+      timestamp: Date.now(),
+    };
+    messages = [...messages, cmdMsg];
+  }
+
+  async function executeCommand(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed.startsWith("/")) return;
+
+    isProcessingCommand = true;
+    try {
+      const parts = trimmed.slice(1).split(/\s+/);
+      const cmd = parts[0].toLowerCase();
+      const args = parts.slice(1);
+
+      switch (cmd) {
+        case "clear":
+          clearMessages();
+          break;
+
+        case "help":
+          addCommandResult(formatHelp());
+          break;
+
+        case "model":
+          await executeModelCommand(args);
+          break;
+
+        default:
+          addCommandResult(`Unknown command: /${cmd}\nType /help for available commands.`, false);
+          break;
+      }
+    } finally {
+      isProcessingCommand = false;
+    }
+  }
+
+  async function executeModelCommand(args: string[]) {
+    try {
+      const config = await getConfig();
+      let output = `Current model: **${config.model}**\nProvider: ${config.provider}\n\n`;
+
+      const models = await listModels();
+      if (models.length > 0) {
+        output += "Available models:\n";
+        for (const m of models) {
+          const active = m.name === config.model ? " (active)" : "";
+          output += `  • ${m.name} — ${m.size}${active}\n`;
+        }
+      } else {
+        output += "No models found. Run /models <name> to pull one.";
+      }
+
+      addCommandResult(output);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addCommandResult(`Error fetching models: ${msg}`, false);
+    }
+  }
+
+  function formatHelp(): string {
+    return [
+      "**Available Commands:**",
+      "",
+      "/help — Show this help message",
+      "/clear — Clear chat history",
+      "/model — Show current model and available models",
+      "/models <name> — Pull a model from Ollama",
+      "",
+      "Type a message (without /) to chat with G-MAN.",
+    ].join("\n");
+  }
+
   return {
     get messages() {
       return messages;
@@ -150,7 +229,11 @@ export function createChatStore() {
     get isThinking() {
       return isThinking;
     },
+    get isProcessingCommand() {
+      return isProcessingCommand;
+    },
     sendMessage,
     clearMessages,
+    executeCommand,
   };
 }

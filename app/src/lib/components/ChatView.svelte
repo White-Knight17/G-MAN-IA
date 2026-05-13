@@ -1,15 +1,19 @@
 <script lang="ts">
   import type { Message } from "$lib/stores/chat.svelte";
+  import { isSlashCommand, parseCommand } from "$lib/commands";
 
   interface Props {
     messages: Message[];
     isThinking: boolean;
+    isProcessingCommand?: boolean;
     onsend?: (text: string) => void;
+    oncommand?: (text: string) => void;
   }
 
-  let { messages, isThinking, onsend }: Props = $props();
+  let { messages, isThinking, isProcessingCommand = false, onsend, oncommand }: Props = $props();
 
   let inputText = $state("");
+  let showCommandPalette = $state(false);
   let messagesContainer: HTMLDivElement;
 
   // Auto-scroll when new messages arrive
@@ -23,9 +27,15 @@
 
   function handleSend() {
     const trimmed = inputText.trim();
-    if (!trimmed || isThinking) return;
-    onsend?.(trimmed);
+    if (!trimmed || isThinking || isProcessingCommand) return;
+
+    if (isSlashCommand(trimmed)) {
+      oncommand?.(trimmed);
+    } else {
+      onsend?.(trimmed);
+    }
     inputText = "";
+    showCommandPalette = false;
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -33,6 +43,31 @@
       e.preventDefault();
       handleSend();
     }
+  }
+
+  function handleInput() {
+    // Show command palette when typing a slash command
+    showCommandPalette = isSlashCommand(inputText.trim());
+  }
+
+  const availableCommands = [
+    { name: "help", desc: "Show available commands" },
+    { name: "clear", desc: "Clear chat history" },
+    { name: "model", desc: "Show current model" },
+    { name: "models", desc: "Pull a model from Ollama" },
+  ];
+
+  function getMatchingCommands(text: string) {
+    const parsed = parseCommand(text);
+    if (!parsed.cmd) return availableCommands;
+    return availableCommands.filter((c) =>
+      c.name.startsWith(parsed.cmd),
+    );
+  }
+
+  function selectCommand(cmd: { name: string; desc: string }) {
+    inputText = "/" + cmd.name + " ";
+    showCommandPalette = false;
   }
 </script>
 
@@ -48,18 +83,21 @@
       {#each messages as msg (msg.id)}
         {@const isUser = msg.role === "user"}
         {@const isTool = msg.role === "tool"}
+        {@const isCommandResult = msg.role === "command-result"}
         <div
           class="message-row"
           class:right={isUser || isTool}
           class:left={!isUser && !isTool}
+          class:full-width={isCommandResult}
         >
           <div
             class="bubble"
             data-role={msg.role}
             data-typing={msg.streaming ? "true" : "false"}
             class:user-bubble={isUser}
-            class:assistant-bubble={!isUser && !isTool}
+            class:assistant-bubble={!isUser && !isTool && !isCommandResult}
             class:tool-bubble={isTool}
+            class:command-bubble={isCommandResult}
           >
             {#if msg.content}
               <div class="message-content">
@@ -81,16 +119,32 @@
 
   <!-- Input bar -->
   <div class="input-bar">
-    <textarea
-      placeholder="Ask G-MAN anything..."
-      bind:value={inputText}
-      onkeydown={handleKeydown}
-      disabled={isThinking}
-      rows="2"
-    ></textarea>
+    <div class="input-wrapper">
+      <textarea
+        placeholder="Ask G-MAN anything... or type / for commands"
+        bind:value={inputText}
+        onkeydown={handleKeydown}
+        oninput={handleInput}
+        disabled={isThinking || isProcessingCommand}
+        rows="2"
+      ></textarea>
+      {#if showCommandPalette}
+        <div class="command-palette">
+          {#each getMatchingCommands(inputText) as cmd}
+            <button
+              class="command-item"
+              onclick={() => selectCommand(cmd)}
+            >
+              <span class="command-name">/{cmd.name}</span>
+              <span class="command-desc">{cmd.desc}</span>
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </div>
     <button
       onclick={handleSend}
-      disabled={isThinking || !inputText.trim()}
+      disabled={isThinking || isProcessingCommand || !inputText.trim()}
       aria-label="Send"
     >
       ▶
@@ -182,6 +236,21 @@
     padding: 0.375rem 0.75rem;
   }
 
+  .command-bubble {
+    background: var(--gman-surface, #1e2030);
+    border: 1px solid var(--gman-border, #292e42);
+    color: var(--gman-text, #c0caf5);
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 0.8125rem;
+    white-space: pre-wrap;
+    max-width: 100%;
+  }
+
+  .message-row.full-width {
+    max-width: 100%;
+    align-self: stretch;
+  }
+
   .typing-dots {
     display: inline-flex;
     gap: 0.15rem;
@@ -259,5 +328,58 @@
   .input-bar button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+  }
+
+  .input-wrapper {
+    flex: 1;
+    position: relative;
+  }
+
+  .input-wrapper textarea {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .command-palette {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    background: var(--gman-surface, #24283b);
+    border: 1px solid var(--gman-border, #1e2030);
+    border-radius: 0.5rem;
+    margin-bottom: 0.25rem;
+    max-height: 200px;
+    overflow-y: auto;
+    box-shadow: var(--gman-elevation-2, 0 3px 6px rgba(0, 0, 0, 0.16));
+    z-index: 10;
+  }
+
+  .command-item {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background: transparent;
+    border: none;
+    color: var(--gman-text, #c0caf5);
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.8125rem;
+  }
+
+  .command-item:hover {
+    background: var(--gman-accent, #3b82f6);
+    color: #fff;
+  }
+
+  .command-name {
+    font-weight: 600;
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+  }
+
+  .command-desc {
+    font-size: 0.75rem;
+    opacity: 0.7;
   }
 </style>

@@ -312,6 +312,152 @@ func (c *OllamaClient) buildSystemPrompt() string {
 	return sb.String()
 }
 
+// ModelInfo represents a single model available in Ollama.
+type ModelInfo struct {
+	Name   string `json:"name"`
+	Size   string `json:"size"`
+	Digest string `json:"digest"`
+}
+
+// ListModels returns all models available in the local Ollama instance.
+// It calls GET /api/tags and parses the response into []ModelInfo.
+func (c *OllamaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/api/tags", nil)
+	if err != nil {
+		return nil, fmt.Errorf("list models: create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("list models: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("list models: %w: status %d", ErrNotOK, resp.StatusCode)
+	}
+
+	var tagsResp struct {
+		Models []struct {
+			Name   string `json:"name"`
+			Size   int64  `json:"size"`
+			Digest string `json:"digest"`
+		} `json:"models"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tagsResp); err != nil {
+		return nil, fmt.Errorf("list models: decode response: %w", err)
+	}
+
+	models := make([]ModelInfo, 0, len(tagsResp.Models))
+	for _, m := range tagsResp.Models {
+		models = append(models, ModelInfo{
+			Name:   m.Name,
+			Size:   formatBytes(m.Size),
+			Digest: m.Digest,
+		})
+	}
+
+	return models, nil
+}
+
+// PullProgress represents a single progress notification during model pull.
+type PullProgress struct {
+	Status    string  `json:"status"`
+	Completed int64   `json:"completed,omitempty"`
+	Total     int64   `json:"total,omitempty"`
+	Percent   float64 `json:"percent,omitempty"`
+}
+
+// PullModel starts pulling a model from Ollama and streams progress via the channel.
+// It calls POST /api/pull with stream:true and yields PullProgress notifications.
+// The channel is NOT closed by this method — the caller should close it after the call returns.
+func (c *OllamaClient) PullModel(ctx context.Context, name string, progressChan chan<- PullProgress) error {
+	body := map[string]interface{}{
+		"model":  name,
+		"stream": true,
+	}
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("pull model: marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/pull", bytes.NewReader(jsonBody))
+	if err != nil {
+		return fmt.Errorf("pull model: create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("pull model: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		// Try to read error body
+		errBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("pull model: %w: status %d: %s", ErrNotOK, resp.StatusCode, string(errBody))
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 10*1024*1024)
+
+	for scanner.Scan() {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("pull model: %w", ctx.Err())
+		default:
+		}
+
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var pullResp struct {
+			Status    string `json:"status"`
+			Completed int64  `json:"completed,omitempty"`
+			Total     int64  `json:"total,omitempty"`
+			Digest    string `json:"digest,omitempty"`
+		}
+		if err := json.Unmarshal(line, &pullResp); err != nil {
+			continue
+		}
+
+		progress := PullProgress{
+			Status:    pullResp.Status,
+			Completed: pullResp.Completed,
+			Total:     pullResp.Total,
+		}
+		if pullResp.Total > 0 {
+			progress.Percent = float64(pullResp.Completed) / float64(pullResp.Total) * 100
+		}
+
+		select {
+		case progressChan <- progress:
+		case <-ctx.Done():
+			return fmt.Errorf("pull model: %w", ctx.Err())
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("pull model: stream read error: %w", err)
+	}
+
+	return nil
+}
+
+// formatBytes converts bytes to a human-readable string (GB or MB).
+func formatBytes(b int64) string {
+	const gb = 1024 * 1024 * 1024
+	const mb = 1024 * 1024
+	if b >= gb {
+		return fmt.Sprintf("%.1f GB", float64(b)/gb)
+	}
+	return fmt.Sprintf("%.1f MB", float64(b)/mb)
+}
+
 // HealthCheck verifies that Ollama is running and the configured model is available.
 // It calls GET /api/tags and checks if c.model is in the response.
 // Returns an error if Ollama is unreachable or the model is not found.

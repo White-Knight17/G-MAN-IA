@@ -24,6 +24,36 @@ export type StreamEvent = {
   data?: unknown;
 };
 
+export type ModelInfo = {
+  name: string;
+  size: string;
+  digest: string;
+};
+
+export type PullProgress = {
+  status: string;
+  completed: number;
+  total: number;
+  percent: number;
+};
+
+export type ConfigResponse = {
+  provider: string;
+  model: string;
+  has_api_key: boolean;
+  theme: string;
+  window: { mode: string };
+};
+
+export type SetConfigParams = {
+  theme?: string;
+  model?: string;
+  provider?: string;
+  ollama_url?: string;
+  api_key?: string;
+  window?: { mode?: string; width?: number };
+};
+
 type JSONRPCNotification = {
   jsonrpc: "2.0";
   method: string;
@@ -117,4 +147,51 @@ export async function* streamChat(
         break;
     }
   }
+}
+
+// ── Model Management ───────────────────────────────────────────────────────
+
+/**
+ * Lists all models available in the local Ollama instance.
+ * @returns Array of ModelInfo with name, size, and digest
+ */
+export async function listModels(): Promise<ModelInfo[]> {
+  const response = await relayRequest("model.list", {});
+  const result = response.result as { models: ModelInfo[] };
+  return result.models ?? [];
+}
+
+/**
+ * Starts pulling a model from Ollama. Progress is streamed via notifications.
+ * @param name The model name to pull (e.g., "llama3.2:3b")
+ * @returns Result with status and model name
+ */
+export async function pullModel(
+  name: string,
+): Promise<{ status: string; model: string }> {
+  const response = await relayRequest("model.pull", { model: name });
+  return response.result as { status: string; model: string };
+}
+
+// ── Configuration ──────────────────────────────────────────────────────────
+
+/**
+ * Gets the current configuration. API keys are never returned — only has_api_key boolean.
+ * @returns ConfigResponse with provider, model, theme, etc.
+ */
+export async function getConfig(): Promise<ConfigResponse> {
+  const response = await relayRequest("config.get", {});
+  return response.result as ConfigResponse;
+}
+
+/**
+ * Updates configuration fields and persists to disk.
+ * @param params Partial config object with fields to update
+ * @returns { ok: true } on success
+ */
+export async function setConfig(
+  params: SetConfigParams,
+): Promise<{ ok: boolean }> {
+  const response = await relayRequest("config.set", params);
+  return response.result as { ok: boolean };
 }

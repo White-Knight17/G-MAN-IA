@@ -22,10 +22,12 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/gentleman/gman/internal/application"
+	gmanconfig "github.com/gentleman/gman/internal/infrastructure/config"
 	"github.com/gentleman/gman/internal/domain"
 	"github.com/gentleman/gman/internal/infrastructure/ollama"
 	"github.com/gentleman/gman/internal/infrastructure/permission"
@@ -50,6 +52,16 @@ func run() error {
 	allowedDirs := []string{
 		expandHome("~/.config"),
 		expandHome("~/.local"),
+	}
+
+	// Load persistent config if available
+	configPath := filepath.Join(expandHome("~/.config"), "gman", "config.json")
+	persistedCfg, _ := gmanconfig.Load(configPath)
+	if persistedCfg.Backend.Model != "" {
+		modelName = persistedCfg.Backend.Model
+	}
+	if persistedCfg.Backend.OllamaURL != "" {
+		ollamaURL = persistedCfg.Backend.OllamaURL
 	}
 
 	// ---------------------------------------------------------------------------
@@ -231,6 +243,159 @@ func run() error {
 		return transport.Response{Result: grants}
 	})
 
+	// "model.list" — list available Ollama models
+	server.Handle("model.list", func(req transport.Request) transport.Response {
+		ctx := context.Background()
+		models, err := agent.ListModels(ctx)
+		if err != nil {
+			return transport.Response{
+				Error: &transport.Error{
+					Code:    transport.InternalError,
+					Message: err.Error(),
+				},
+			}
+		}
+		return transport.Response{Result: map[string]interface{}{
+			"models": models,
+		}}
+	})
+
+	// "model.pull" — start pulling a model (streams progress via notifications)
+	server.Handle("model.pull", func(req transport.Request) transport.Response {
+		var params struct {
+			Model string `json:"model"`
+		}
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return transport.Response{
+				Error: &transport.Error{
+					Code:    transport.InvalidParams,
+					Message: err.Error(),
+				},
+			}
+		}
+		if params.Model == "" {
+			return transport.Response{
+				Error: &transport.Error{
+					Code:    transport.InvalidParams,
+					Message: "model parameter is required",
+				},
+			}
+		}
+
+		progressCh := make(chan ollama.PullProgress, 10)
+
+		go func() {
+			ctx := context.Background()
+			err := agent.PullModel(ctx, params.Model, progressCh)
+			close(progressCh)
+			if err != nil {
+				server.SendNotification("model.pull.error", map[string]interface{}{
+					"model": params.Model,
+					"error": err.Error(),
+				})
+				return
+			}
+		}()
+
+		// Stream progress as notifications
+		for p := range progressCh {
+			server.SendNotification("model.pull.progress", map[string]interface{}{
+				"model":     params.Model,
+				"status":    p.Status,
+				"completed": p.Completed,
+				"total":     p.Total,
+				"percent":   p.Percent,
+			})
+		}
+
+		return transport.Response{Result: map[string]interface{}{
+			"status": "complete",
+			"model":  params.Model,
+		}}
+	})
+
+	// "config.get" — return current config (API keys masked)
+	server.Handle("config.get", func(req transport.Request) transport.Response {
+		cfg, err := gmanconfig.Load(configPath)
+		if err != nil {
+			return transport.Response{
+				Error: &transport.Error{
+					Code:    transport.InternalError,
+					Message: err.Error(),
+				},
+			}
+		}
+		return transport.Response{Result: safeConfigMap(cfg)}
+	})
+
+	// "config.set" — update config fields and persist
+	server.Handle("config.set", func(req transport.Request) transport.Response {
+		cfg, err := gmanconfig.Load(configPath)
+		if err != nil {
+			return transport.Response{
+				Error: &transport.Error{
+					Code:    transport.InternalError,
+					Message: err.Error(),
+				},
+			}
+		}
+
+		var params struct {
+			Theme     string            `json:"theme,omitempty"`
+			Model     string            `json:"model,omitempty"`
+			Provider  string            `json:"provider,omitempty"`
+			OllamaURL string            `json:"ollama_url,omitempty"`
+			APIKey    string            `json:"api_key,omitempty"`
+			Window    map[string]any    `json:"window,omitempty"`
+		}
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return transport.Response{
+				Error: &transport.Error{
+					Code:    transport.InvalidParams,
+					Message: err.Error(),
+				},
+			}
+		}
+
+		if params.Theme != "" {
+			cfg.Theme = params.Theme
+		}
+		if params.Model != "" {
+			cfg.Backend.Model = params.Model
+		}
+		if params.Provider != "" {
+			cfg.Backend.Provider = params.Provider
+		}
+		if params.OllamaURL != "" {
+			cfg.Backend.OllamaURL = params.OllamaURL
+		}
+		if params.APIKey != "" {
+			if cfg.Backend.APIKeys == nil {
+				cfg.Backend.APIKeys = make(map[string]string)
+			}
+			cfg.Backend.APIKeys[cfg.Backend.Provider] = params.APIKey
+		}
+		if params.Window != nil {
+			if mode, ok := params.Window["mode"].(string); ok {
+				cfg.Window.Mode = mode
+			}
+			if width, ok := params.Window["width"].(float64); ok {
+				cfg.Window.Width = int(width)
+			}
+		}
+
+		if err := cfg.Save(configPath); err != nil {
+			return transport.Response{
+				Error: &transport.Error{
+					Code:    transport.InternalError,
+					Message: err.Error(),
+				},
+			}
+		}
+
+		return transport.Response{Result: map[string]bool{"ok": true}}
+	})
+
 	// ---------------------------------------------------------------------------
 	// Signal handling
 	// ---------------------------------------------------------------------------
@@ -271,4 +436,24 @@ func expandHome(path string) string {
 		return home
 	}
 	return path
+}
+
+// safeConfigMap returns a config representation without exposing API key values.
+func safeConfigMap(c gmanconfig.Config) map[string]interface{} {
+	hasKey := false
+	for _, v := range c.Backend.APIKeys {
+		if v != "" {
+			hasKey = true
+			break
+		}
+	}
+	return map[string]interface{}{
+		"provider":    c.Backend.Provider,
+		"model":       c.Backend.Model,
+		"has_api_key": hasKey,
+		"theme":       c.Theme,
+		"window": map[string]interface{}{
+			"mode": c.Window.Mode,
+		},
+	}
 }

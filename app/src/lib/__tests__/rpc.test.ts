@@ -5,9 +5,16 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   relayRequest,
   streamChat,
+  listModels,
+  pullModel,
+  getConfig,
+  setConfig,
   type JSONRPCRequest,
   type JSONRPCResponse,
   type StreamEvent,
+  type ModelInfo,
+  type ConfigResponse,
+  type PullProgress,
 } from "../rpc";
 
 // ── Mock Tauri invoke ──
@@ -283,5 +290,156 @@ describe("streamChat", () => {
 
     expect(events).toHaveLength(1);
     expect(events[0]).toEqual({ type: "done" });
+  });
+});
+
+// ============================================================================
+// listModels tests
+// ============================================================================
+
+describe("listModels", () => {
+  it("calls model.list RPC method and returns models array", async () => {
+    const mockModels: ModelInfo[] = [
+      { name: "llama3.2:3b", size: "2.0 GB", digest: "abc123" },
+      { name: "qwen2.5:3b", size: "1.8 GB", digest: "def456" },
+    ];
+
+    vi.mocked(invoke).mockResolvedValueOnce({
+      jsonrpc: "2.0",
+      id: 1,
+      result: { models: mockModels },
+    });
+
+    const result = await listModels();
+
+    expect(invoke).toHaveBeenCalledWith("relay_request", {
+      jsonrpc: "2.0",
+      id: expect.any(Number),
+      method: "model.list",
+      params: {},
+    });
+
+    expect(result).toEqual(mockModels);
+  });
+
+  it("returns empty array when no models available", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      jsonrpc: "2.0",
+      id: 1,
+      result: { models: [] },
+    });
+
+    const result = await listModels();
+    expect(result).toEqual([]);
+  });
+});
+
+// ============================================================================
+// pullModel tests
+// ============================================================================
+
+describe("pullModel", () => {
+  it("calls model.pull RPC method with model name", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      jsonrpc: "2.0",
+      id: 1,
+      result: { status: "complete", model: "llama3.2:3b" },
+    });
+
+    const result = await pullModel("llama3.2:3b");
+
+    expect(invoke).toHaveBeenCalledWith("relay_request", {
+      jsonrpc: "2.0",
+      id: expect.any(Number),
+      method: "model.pull",
+      params: { model: "llama3.2:3b" },
+    });
+
+    expect(result).toEqual({ status: "complete", model: "llama3.2:3b" });
+  });
+
+  it("throws when pull fails", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      jsonrpc: "2.0",
+      id: 1,
+      error: { code: -32000, message: "model not found" },
+    });
+
+    await expect(pullModel("nonexistent")).rejects.toThrow("model not found");
+  });
+});
+
+// ============================================================================
+// getConfig tests
+// ============================================================================
+
+describe("getConfig", () => {
+  it("calls config.get RPC method", async () => {
+    const mockConfig: ConfigResponse = {
+      provider: "ollama",
+      model: "llama3.2:3b",
+      has_api_key: false,
+      theme: "dark",
+      window: { mode: "floating" },
+    };
+
+    vi.mocked(invoke).mockResolvedValueOnce({
+      jsonrpc: "2.0",
+      id: 1,
+      result: mockConfig,
+    });
+
+    const result = await getConfig();
+
+    expect(invoke).toHaveBeenCalledWith("relay_request", {
+      jsonrpc: "2.0",
+      id: expect.any(Number),
+      method: "config.get",
+      params: {},
+    });
+
+    expect(result).toEqual(mockConfig);
+    // Verify API key value is NOT exposed
+    expect(result).not.toHaveProperty("api_keys");
+    expect(result).toHaveProperty("has_api_key");
+  });
+});
+
+// ============================================================================
+// setConfig tests
+// ============================================================================
+
+describe("setConfig", () => {
+  it("calls config.set RPC method with partial config", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      jsonrpc: "2.0",
+      id: 1,
+      result: { ok: true },
+    });
+
+    const result = await setConfig({ theme: "light" });
+
+    expect(invoke).toHaveBeenCalledWith("relay_request", {
+      jsonrpc: "2.0",
+      id: expect.any(Number),
+      method: "config.set",
+      params: { theme: "light" },
+    });
+
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("can update model via config.set", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      jsonrpc: "2.0",
+      id: 1,
+      result: { ok: true },
+    });
+
+    await setConfig({ model: "qwen2.5:7b" });
+
+    const callArgs = vi.mocked(invoke).mock.calls[0];
+    const payload = callArgs[1] as JSONRPCRequest;
+    expect(payload.params).toEqual({ model: "qwen2.5:7b" });
   });
 });
