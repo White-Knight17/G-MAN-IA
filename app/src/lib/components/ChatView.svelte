@@ -219,12 +219,24 @@
     background: var(--gman-accent, #3b82f6);
     color: #fff;
     border-bottom-right-radius: 0.25rem;
+    box-shadow: var(--gman-elevation-1, 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24));
+    transition: box-shadow 0.15s ease, transform 0.1s ease;
+  }
+
+  .user-bubble:hover {
+    box-shadow: var(--gman-elevation-2, 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23));
   }
 
   .assistant-bubble {
     background: var(--gman-surface, #24283b);
     color: var(--gman-text, #c0caf5);
     border-bottom-left-radius: 0.25rem;
+    box-shadow: var(--gman-elevation-1, 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24));
+    transition: box-shadow 0.15s ease, transform 0.1s ease;
+  }
+
+  .assistant-bubble:hover {
+    box-shadow: var(--gman-elevation-2, 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23));
   }
 
   .tool-bubble {
@@ -244,6 +256,7 @@
     font-size: 0.8125rem;
     white-space: pre-wrap;
     max-width: 100%;
+    box-shadow: var(--gman-elevation-2, 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23));
   }
 
   .message-row.full-width {
@@ -318,16 +331,26 @@
     padding: 0.5rem 1rem;
     font-size: 0.875rem;
     cursor: pointer;
-    transition: opacity 0.15s;
+    box-shadow: var(--gman-elevation-1, 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24));
+    transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease, filter 0.15s ease;
   }
 
   .input-bar button:hover:not(:disabled) {
-    opacity: 0.9;
+    transform: scale(1.02);
+    filter: brightness(1.1);
+    box-shadow: var(--gman-elevation-2, 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23));
+  }
+
+  .input-bar button:active:not(:disabled) {
+    transform: scale(0.98);
+    filter: brightness(0.9);
+    box-shadow: none;
   }
 
   .input-bar button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+    box-shadow: none;
   }
 
   .input-wrapper {

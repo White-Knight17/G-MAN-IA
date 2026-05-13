@@ -3,6 +3,8 @@
   import OnboardingWizard from "$lib/components/OnboardingWizard.svelte";
   import PermissionDialog from "$lib/components/PermissionDialog.svelte";
   import { createChatStore } from "$lib/stores/chat.svelte";
+  import { runMigration } from "$lib/migration";
+  import { setConfig } from "$lib/rpc";
 
   // ── State ──────────────────────────────────────────────────────────────
 
@@ -18,6 +20,31 @@
     } else {
       showWizard = true;
     }
+  });
+
+  // ── Config Migration (localStorage → config.json) ─────────────────────
+
+  $effect(() => {
+    // Run migration silently on mount
+    runMigration({
+      getItem: (key: string) => localStorage.getItem(key),
+      setItem: (key: string, value: string) => localStorage.setItem(key, value),
+      setConfig: async (params) => {
+        try {
+          return await setConfig(params as any);
+        } catch {
+          // Log but don't crash — migration is best-effort
+          console.warn("[gman] config migration failed:", params);
+          return { ok: false };
+        }
+      },
+    }).then((result) => {
+      if (result.success && result.migrated) {
+        console.log("[gman] config migrated from localStorage to config.json");
+      } else if (!result.success && result.error) {
+        console.warn("[gman] migration error:", result.error);
+      }
+    });
   });
 
   // ── Handlers ───────────────────────────────────────────────────────────
@@ -199,12 +226,18 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.1s, color 0.1s;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
   }
 
   .window-controls button:hover {
-    background: var(--gman-border);
+    background: var(--gman-surface-hover, #2f3348);
     color: var(--gman-text);
+    transform: scale(1.02);
+  }
+
+  .window-controls button:active {
+    transform: scale(0.98);
+    background: var(--gman-border, #1e2030);
   }
 
   .close-btn:hover {

@@ -212,4 +212,43 @@ describe("ChatView", () => {
     expect(screen.getByText("Second")).toBeInTheDocument();
     expect(screen.getByText("Response 2")).toBeInTheDocument();
   });
+
+  it("applies user-bubble class to user messages", () => {
+    const messages: Message[] = [
+      { id: "1", role: "user", content: "Hello", timestamp: 1000 },
+    ];
+    render(ChatView, { props: { messages, isThinking: false } });
+    const bubble = document.querySelector(".user-bubble");
+    expect(bubble).toBeInTheDocument();
+    expect(bubble?.getAttribute("data-role")).toBe("user");
+  });
+
+  it("applies assistant-bubble class to assistant messages", () => {
+    const messages: Message[] = [
+      { id: "1", role: "assistant", content: "Hi there", timestamp: 1000 },
+    ];
+    render(ChatView, { props: { messages, isThinking: false } });
+    const bubble = document.querySelector(".assistant-bubble");
+    expect(bubble).toBeInTheDocument();
+    expect(bubble?.getAttribute("data-role")).toBe("assistant");
+  });
+
+  it("applies command-bubble class to command-result messages", () => {
+    const messages: Message[] = [
+      { id: "1", role: "command-result", content: "**Help output**", timestamp: 1000 },
+    ];
+    render(ChatView, { props: { messages, isThinking: false } });
+    const bubble = document.querySelector(".command-bubble");
+    expect(bubble).toBeInTheDocument();
+    expect(bubble?.getAttribute("data-role")).toBe("command-result");
+  });
+
+  it("renders command result as full-width", () => {
+    const messages: Message[] = [
+      { id: "1", role: "command-result", content: "Result", timestamp: 1000 },
+    ];
+    render(ChatView, { props: { messages, isThinking: false } });
+    const row = document.querySelector(".full-width");
+    expect(row).toBeInTheDocument();
+  });
 });
