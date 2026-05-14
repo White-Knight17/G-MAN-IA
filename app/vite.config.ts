@@ -2,13 +2,11 @@ import { defineConfig } from "vitest/config";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import path from "path";
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [svelte()],
   clearScreen: false,
-  // Disable SSR entirely — this is a Tauri client-only app
-  ssr: {
-    noExternal: true,
+  optimizeDeps: {
+    include: ["svelte"],
   },
   server: {
     port: 1420,
@@ -18,7 +16,7 @@ export default defineConfig({
     },
   },
   resolve: {
-    conditions: process.env.VITEST ? ["browser"] : [],
+    conditions: ["browser"],
     alias: {
       $lib: path.resolve("./src/lib"),
     },
