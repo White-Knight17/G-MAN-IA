@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.1.0](https://github.com/White-Knight17/G-MAN-IA/compare/v2.0.0...v2.1.0) (2026-05-14)
+
+
+### Features
+
+* accept any API provider in /api command ([f103c40](https://github.com/White-Knight17/G-MAN-IA/commit/f103c409161a441880c34b96be1e837d6c97b2f1))
+* add OpenAI-compatible API backend with multi-provider support ([b3e3f2b](https://github.com/White-Knight17/G-MAN-IA/commit/b3e3f2b42e0a76deec507da2325becad47053fb6))
+* **companion-mode:** add slash commands and JSON-RPC handlers ([4bee3b2](https://github.com/White-Knight17/G-MAN-IA/commit/4bee3b250366ec44f79ec58f13ed563027c2d55c))
+* **companion-mode:** Material UI, config migration, E2E tests ([77be6aa](https://github.com/White-Knight17/G-MAN-IA/commit/77be6aa375b1d0926b498e29f61a6762712b539e))
+* v2.1.0 Companion Mode — sidebar, slash commands, multi-provider APIs ([e6f95bb](https://github.com/White-Knight17/G-MAN-IA/commit/e6f95bb0293b6a2cebfaecbf8a594c6d55dd8138))
+
+
+### Bug Fixes
+
+* add missing oncommand prop to ChatView ([32349db](https://github.com/White-Knight17/G-MAN-IA/commit/32349db3a38584222bf0128f6f550cdccbc0c36e))
+* add missing Tauri commands, improve UX, auto-detect Ollama ([0d75f48](https://github.com/White-Knight17/G-MAN-IA/commit/0d75f486a1fa98ce0911c16ad73c8a342285815b))
+* auto-set correct model when switching API provider ([785421c](https://github.com/White-Knight17/G-MAN-IA/commit/785421c812b8394bec787c3f4196f2a3d8fefe17))
+* create binaries directory in build-core target ([c0a500f](https://github.com/White-Knight17/G-MAN-IA/commit/c0a500fe80b0a25a57a5b970628b7d6227d9b442))
+* force browser conditions in Vite to prevent SSR mount error ([13740ae](https://github.com/White-Knight17/G-MAN-IA/commit/13740ae21f695e57583c9f412288e3a7e0212af4))
+* make relay_request and stream_chat async to prevent UI freeze ([303994c](https://github.com/White-Knight17/G-MAN-IA/commit/303994cc4dfb32a4d61e9e5bb8b2dcd6ec90d77b))
+* rename Tauri commands to match frontend invoke names ([ff51d6a](https://github.com/White-Knight17/G-MAN-IA/commit/ff51d6ace3baa6e6fd56eaecfefb40f8e0be158a))
+* resolve Svelte 5 lifecycle_function_unavailable error ([ee97fc5](https://github.com/White-Knight17/G-MAN-IA/commit/ee97fc5a24f61fc253cbe4c40b268d4659fe638a))
+* rewrite Tauri relay commands to properly handle notifications ([94b0bb9](https://github.com/White-Knight17/G-MAN-IA/commit/94b0bb94cf1a21f7978f14b429521f0d73d054e5))
+* use dynamic imports to prevent SSR mount error ([b6ae964](https://github.com/White-Knight17/G-MAN-IA/commit/b6ae9642824a4db2eb1c1ee24507b55f76bb1b71))
+
 ## v2.1.0 (2026-05-13) — Companion Mode
 
 ### 🎉 G-MAN becomes a desktop companion
