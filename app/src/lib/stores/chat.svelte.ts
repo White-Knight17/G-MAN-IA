@@ -174,7 +174,11 @@ export function createChatStore() {
           break;
 
         case "model":
-          await executeModelCommand(args);
+          if (args.length > 0) {
+            await changeModelCommand(args[0]);
+          } else {
+            await executeModelCommand(args);
+          }
           break;
 
         case "models":
@@ -215,16 +219,44 @@ export function createChatStore() {
 
   async function setApiKeyCommand(provider: string, key: string) {
     if (!provider || !key) {
-      addCommandResult(`❌ Usage: /api <provider> <key>\nExample: /api openai sk-xxx...`, false);
+      addCommandResult(`❌ Usage: /api <provider> <key> [model]\nExample: /api deepseek sk-xxx...\nExample: /api openai sk-xxx... gpt-4o`, false);
       return;
     }
+
+    // Auto-detect model for known providers
+    const modelDefaults: Record<string, string> = {
+      deepseek: "deepseek-v4-pro",
+      openai: "gpt-4o",
+      groq: "llama-3.3-70b-versatile",
+      anthropic: "claude-sonnet-4-20250514",
+    };
+    const autoModel = modelDefaults[provider.toLowerCase()] || "gpt-4o";
+
     try {
-      const params: Record<string, string> = { provider: provider.toLowerCase(), api_key: key };
-      await setConfig(params);
-      addCommandResult(`✅ API key set for **${provider}**.\nRun /model to see current configuration.\n\nTip: G-MAN auto-detects base URLs for openai, deepseek, groq.\nUse /config for advanced settings.`);
+      await setConfig({
+        provider: provider.toLowerCase(),
+        api_key: key,
+        model: autoModel,
+      });
+      addCommandResult(
+        `✅ Switched to **${provider}**\n` +
+        `Model: **${autoModel}**\n\n` +
+        `Tip: Change model with /model, or pass it directly:\n` +
+        `/api ${provider} <key> <model-name>`
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       addCommandResult(`❌ Failed to set API key: ${msg}`, false);
+    }
+  }
+
+  async function changeModelCommand(modelName: string) {
+    try {
+      await setConfig({ model: modelName });
+      addCommandResult(`✅ Model changed to **${modelName}**`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addCommandResult(`❌ Failed to change model: ${msg}`, false);
     }
   }
 
@@ -269,9 +301,10 @@ export function createChatStore() {
       "",
       "/help — Show this help message",
       "/clear — Clear chat history",
-      "/model — Show current model and available models",
+      "/model — Show current config and available models",
+      "/model <name> — Switch to a different model",
       "/models <name> — Pull a model from Ollama",
-      "/api <provider> <key> — Set remote API key (openai, deepseek, groq, etc.)",
+      "/api <provider> <key> — Set remote API key (auto-detects model)",
       "",
       "Type a message (without /) to chat with G-MAN.",
     ].join("\n");

@@ -53,7 +53,7 @@
   const availableCommands = [
     { name: "help", desc: "Show available commands" },
     { name: "clear", desc: "Clear chat history" },
-    { name: "model", desc: "Show current model" },
+    { name: "model", desc: "Show/set model" },
     { name: "models", desc: "Pull a model from Ollama" },
     { name: "api", desc: "Set remote API key" },
   ];
