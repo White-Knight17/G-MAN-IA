@@ -2,6 +2,7 @@
 
 # Build Go sidecar into the Tauri sidecar binaries directory
 build-core:
+	mkdir -p app/src-tauri/binaries
 	cd core && go build -o ../app/src-tauri/binaries/gman-core-x86_64-unknown-linux-gnu ./cmd/gman-server
 
 # Build Svelte frontend

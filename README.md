@@ -4,7 +4,7 @@
 
 Un asistente de IA 100% local que te ayuda a configurar Arch Linux + Hyprland sin tocar el kernel. Le pedís, él hace. Simple.
 
-> **Estado**: v1.0.0 — Desktop GUI funcional. 330 tests, 0 fallos.
+> **Estado**: v2.1.0 — Companion mode + Multi-provider APIs. 452 tests, 0 fallos.
 
 ---
 

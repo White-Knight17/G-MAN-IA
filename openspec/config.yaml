@@ -1,0 +1,31 @@
+schema: spec-driven
+
+context: |
+  Tech stack: Go 1.26 (core), Tauri v2 + Rust 2021 (shell), Svelte 5 + Vite 6 + TypeScript 5 (UI)
+  Architecture: Clean/Hexagonal in core/ (domain, application, infrastructure, transport, ui layers)
+  Testing: go test (core), vitest + testing-library/svelte (UI), cargo test (Rust), Playwright (E2E)
+  Style: Conventional commits, branch naming type/description, pnpm package manager
+  CI: GitHub Actions — lint (go vet), test (go/rust/svelte), build (full Tauri bundle)
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Include sequence diagrams for complex flows
+    - Document architecture decisions with rationale
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+  apply:
+    - Follow existing code patterns
+    tdd: true
+    test_command: "make test-all"
+  verify:
+    test_command: "make test-all"
+    build_command: "make build"
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas

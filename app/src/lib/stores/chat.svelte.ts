@@ -1,11 +1,11 @@
 // G-MAN v1.0 — Chat Store (Svelte 5 runes)
 // Manages message history, streaming state, and RPC integration
 
-import { streamChat } from "../rpc";
+import { streamChat, listModels, pullModel, getConfig, setConfig } from "../rpc";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type MessageRole = "user" | "assistant" | "system" | "tool";
+export type MessageRole = "user" | "assistant" | "system" | "tool" | "command-result";
 
 export type Message = {
   id: string;
@@ -27,6 +27,7 @@ function nextMsgId(): string {
 export function createChatStore() {
   let messages = $state<Message[]>([]);
   let isThinking = $state(false);
+  let isProcessingCommand = $state(false);
 
   async function sendMessage(text: string) {
     // Add user message immediately
@@ -143,6 +144,172 @@ export function createChatStore() {
     isThinking = false;
   }
 
+  function addCommandResult(content: string, success: boolean = true) {
+    const cmdMsg: Message = {
+      id: nextMsgId(),
+      role: "command-result",
+      content,
+      timestamp: Date.now(),
+    };
+    messages = [...messages, cmdMsg];
+  }
+
+  async function executeCommand(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed.startsWith("/")) return;
+
+    isProcessingCommand = true;
+    try {
+      const parts = trimmed.slice(1).split(/\s+/);
+      const cmd = parts[0].toLowerCase();
+      const args = parts.slice(1);
+
+      switch (cmd) {
+        case "clear":
+          clearMessages();
+          break;
+
+        case "help":
+          addCommandResult(formatHelp());
+          break;
+
+        case "model":
+          if (args.length > 0) {
+            await changeModelCommand(args[0]);
+          } else {
+            await executeModelCommand(args);
+          }
+          break;
+
+        case "models":
+          if (args.length === 0) {
+            addCommandResult("Usage: /models <name>\nExample: /models qwen2.5:3b", false);
+          } else {
+            await pullModelCommand(args[0]);
+          }
+          break;
+
+        case "api":
+          if (args.length < 2) {
+            addCommandResult("Usage: /api <provider> <key>\nExample: /api openai sk-xxx...", false);
+          } else {
+            await setApiKeyCommand(args[0], args.slice(1).join(" "));
+          }
+          break;
+
+        default:
+          addCommandResult(`Unknown command: /${cmd}\nType /help for available commands.`, false);
+          break;
+      }
+    } finally {
+      isProcessingCommand = false;
+    }
+  }
+
+  async function pullModelCommand(name: string) {
+    addCommandResult(`⬇️ Pulling **${name}** from Ollama...`);
+    try {
+      const result = await pullModel(name);
+      addCommandResult(`✅ **${name}** downloaded successfully.\nRun /model to see available models.`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addCommandResult(`❌ Failed to pull ${name}: ${msg}`, false);
+    }
+  }
+
+  async function setApiKeyCommand(provider: string, key: string) {
+    if (!provider || !key) {
+      addCommandResult(`❌ Usage: /api <provider> <key> [model]\nExample: /api deepseek sk-xxx...\nExample: /api openai sk-xxx... gpt-4o`, false);
+      return;
+    }
+
+    // Auto-detect model for known providers
+    const modelDefaults: Record<string, string> = {
+      deepseek: "deepseek-v4-pro",
+      openai: "gpt-4o",
+      groq: "llama-3.3-70b-versatile",
+      anthropic: "claude-sonnet-4-20250514",
+    };
+    const autoModel = modelDefaults[provider.toLowerCase()] || "gpt-4o";
+
+    try {
+      await setConfig({
+        provider: provider.toLowerCase(),
+        api_key: key,
+        model: autoModel,
+      });
+      addCommandResult(
+        `✅ Switched to **${provider}**\n` +
+        `Model: **${autoModel}**\n\n` +
+        `Tip: Change model with /model, or pass it directly:\n` +
+        `/api ${provider} <key> <model-name>`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addCommandResult(`❌ Failed to set API key: ${msg}`, false);
+    }
+  }
+
+  async function changeModelCommand(modelName: string) {
+    try {
+      await setConfig({ model: modelName });
+      addCommandResult(`✅ Model changed to **${modelName}**`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addCommandResult(`❌ Failed to change model: ${msg}`, false);
+    }
+  }
+
+  async function executeModelCommand(args: string[]) {
+    try {
+      const config = await getConfig();
+      const isLocal = config.provider === "ollama" || !config.provider;
+      let output = `**Provider**: ${config.provider || "ollama"}\n`;
+      output += `**Model**: ${config.model || (isLocal ? "llama3.2:3b" : "gpt-4o")}\n`;
+      output += `**API Key**: ${config.has_api_key ? "🔑 Set" : "❌ Not set"}\n\n`;
+
+      if (isLocal) {
+        try {
+          const models = await listModels();
+          if (models.length > 0) {
+            output += "Local Ollama models:\n";
+            for (const m of models) {
+              const active = m.name === config.model ? " (active)" : "";
+              output += `  • ${m.name} — ${m.size}${active}\n`;
+            }
+          } else {
+            output += "No local models found. Run /models <name> to pull one.";
+          }
+        } catch {
+          output += "⚠️ Ollama not running. Start it with: systemctl --user start ollama";
+        }
+      } else {
+        output += "Using remote API. Supported providers: openai, deepseek, groq\n";
+        output += "Run /api <provider> <key> to switch provider.";
+      }
+
+      addCommandResult(output);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addCommandResult(`Error fetching models: ${msg}`, false);
+    }
+  }
+
+  function formatHelp(): string {
+    return [
+      "**Available Commands:**",
+      "",
+      "/help — Show this help message",
+      "/clear — Clear chat history",
+      "/model — Show current config and available models",
+      "/model <name> — Switch to a different model",
+      "/models <name> — Pull a model from Ollama",
+      "/api <provider> <key> — Set remote API key (auto-detects model)",
+      "",
+      "Type a message (without /) to chat with G-MAN.",
+    ].join("\n");
+  }
+
   return {
     get messages() {
       return messages;
@@ -150,7 +317,12 @@ export function createChatStore() {
     get isThinking() {
       return isThinking;
     },
+    get isProcessingCommand() {
+      return isProcessingCommand;
+    },
     sendMessage,
     clearMessages,
+    executeCommand,
+    addCommandResult,
   };
 }
