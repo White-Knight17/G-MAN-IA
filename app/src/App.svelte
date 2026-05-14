@@ -96,7 +96,9 @@
       <ChatView
         messages={chatStore.messages}
         isThinking={chatStore.isThinking}
+        isProcessingCommand={chatStore.isProcessingCommand}
         onsend={handleSendMessage}
+        oncommand={(text) => chatStore.executeCommand(text)}
       />
     {:else}
       <div class="loading">
