@@ -327,7 +327,18 @@ fn main() {
 /// Relays a JSON-RPC request to the Go sidecar and returns the response.
 /// Skips notification lines (no "id" field) until it finds the matching response.
 #[tauri::command]
-fn relay_request(
+async fn relay_request(
+    app: tauri::AppHandle,
+    method: String,
+    params: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        relay_request_blocking(app, method, params)
+    }).await.map_err(|e| format!("{}", e))?;
+    result
+}
+
+fn relay_request_blocking(
     app: tauri::AppHandle,
     method: String,
     params: serde_json::Value,
@@ -379,7 +390,17 @@ fn relay_request(
 /// Reads agent.event notifications until the final response arrives,
 /// then returns all notifications as NDJSON string.
 #[tauri::command]
-fn stream_chat(
+async fn stream_chat(
+    app: tauri::AppHandle,
+    input: String,
+) -> Result<String, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        stream_chat_blocking(app, input)
+    }).await.map_err(|e| format!("{}", e))?;
+    result
+}
+
+fn stream_chat_blocking(
     app: tauri::AppHandle,
     input: String,
 ) -> Result<String, String> {
