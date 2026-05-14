@@ -55,6 +55,7 @@
     { name: "clear", desc: "Clear chat history" },
     { name: "model", desc: "Show current model" },
     { name: "models", desc: "Pull a model from Ollama" },
+    { name: "api", desc: "Set remote API key" },
   ];
 
   function getMatchingCommands(text: string) {
@@ -365,17 +366,16 @@
 
   .command-palette {
     position: absolute;
-    bottom: 100%;
+    bottom: calc(100% + 0.25rem);
     left: 0;
     right: 0;
     background: var(--gman-surface, #24283b);
     border: 1px solid var(--gman-border, #1e2030);
     border-radius: 0.5rem;
-    margin-bottom: 0.25rem;
     max-height: 200px;
     overflow-y: auto;
-    box-shadow: var(--gman-elevation-2, 0 3px 6px rgba(0, 0, 0, 0.16));
-    z-index: 10;
+    box-shadow: var(--gman-elevation-3, 0 10px 20px rgba(0, 0, 0, 0.19), 0 6px 6px rgba(0, 0, 0, 0.23));
+    z-index: 100;
   }
 
   .command-item {

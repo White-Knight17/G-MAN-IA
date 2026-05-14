@@ -310,12 +310,139 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            relay_request_command,
+            stream_chat_command,
             set_window_mode,
             toggle_window,
             get_window_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running G-MAN");
+}
+
+// ============================================================================
+// Tauri commands — JSON-RPC relay to Go sidecar
+// ============================================================================
+
+/// Relays a JSON-RPC request to the Go sidecar and returns the response.
+#[tauri::command]
+fn relay_request_command(
+    app: tauri::AppHandle,
+    method: String,
+    params: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    use tauri::Manager;
+    use std::io::Write;
+
+    let state = app.state::<AppState>();
+    let mut guard = state.sidecar.lock().map_err(|e| e.to_string())?;
+    let child = guard.as_mut().ok_or("sidecar not running")?;
+
+    let id = 1; // Simple ID — in production use a counter
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": method,
+        "params": params,
+    });
+
+    let request_str = serde_json::to_string(&request).map_err(|e| e.to_string())?;
+
+    let mut stdin = child.stdin.take().ok_or("sidecar stdin unavailable")?;
+    writeln!(stdin, "{}", request_str).map_err(|e| e.to_string())?;
+    stdin.flush().map_err(|e| e.to_string())?;
+    child.stdin = Some(stdin);
+
+    // Read response from stdout
+    let stdout = child.stdout.as_mut().ok_or("sidecar stdout unavailable")?;
+    let mut reader = BufReader::new(stdout);
+    let mut line = String::new();
+    reader.read_line(&mut line).map_err(|e| e.to_string())?;
+
+    let response: serde_json::Value = serde_json::from_str(&line).map_err(|e| e.to_string())?;
+    Ok(response)
+}
+
+/// Opens a streaming chat session with the Go sidecar.
+/// Returns NDJSON lines as a single string (one notification per line).
+#[tauri::command]
+fn stream_chat_command(
+    app: tauri::AppHandle,
+    input: String,
+) -> Result<String, String> {
+    use tauri::Manager;
+    use std::io::Write;
+
+    let state = app.state::<AppState>();
+    let mut guard = state.sidecar.lock().map_err(|e| e.to_string())?;
+    let child = guard.as_mut().ok_or("sidecar not running")?;
+
+    // Send agent.stream request
+    let id = 1;
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "agent.stream",
+        "params": { "input": input },
+    });
+
+    let request_str = serde_json::to_string(&request).map_err(|e| e.to_string())?;
+
+    let mut stdin = child.stdin.take().ok_or("sidecar stdin unavailable")?;
+    writeln!(stdin, "{}", request_str).map_err(|e| e.to_string())?;
+    stdin.flush().map_err(|e| e.to_string())?;
+    child.stdin = Some(stdin);
+
+    // Read streaming notifications from stdout until stream.done
+    let stdout = child.stdout.as_mut().ok_or("sidecar stdout unavailable")?;
+    let mut reader = BufReader::new(stdout);
+    let mut notifications = Vec::new();
+
+    loop {
+        let mut line = String::new();
+        reader.read_line(&mut line).map_err(|e| e.to_string())?;
+        if line.is_empty() {
+            break;
+        }
+
+        // Convert to stream notification format expected by frontend
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&line) {
+            if let Some(method) = parsed.get("method").and_then(|m| m.as_str()) {
+                if method == "agent.event" {
+                    let params = parsed.get("params").cloned().unwrap_or(serde_json::json!({}));
+                    let event_type = params.get("type").and_then(|t| t.as_str()).unwrap_or("unknown");
+                    let notification = match event_type {
+                        "token" => {
+                            let token = params.get("content").and_then(|c| c.as_str()).unwrap_or("");
+                            format!("{{\"jsonrpc\":\"2.0\",\"method\":\"stream.token\",\"params\":{{\"token\":\"{}\"}}}}", 
+                                    token.replace('\\', "\\\\").replace('"', "\\\""))
+                        }
+                        "tool_call" => {
+                            format!("{{\"jsonrpc\":\"2.0\",\"method\":\"stream.tool_call\",\"params\":{{\"tool\":\"tool\",\"path\":\"\"}}}}")
+                        }
+                        "tool_result" => {
+                            let content = params.get("content").and_then(|c| c.as_str()).unwrap_or("");
+                            format!("{{\"jsonrpc\":\"2.0\",\"method\":\"stream.tool_result\",\"params\":{{\"content\":\"{}\"}}}}",
+                                    content.replace('\\', "\\\\").replace('"', "\\\""))
+                        }
+                        "error" => {
+                            let error = params.get("error").and_then(|e| e.as_str()).unwrap_or("unknown");
+                            format!("{{\"jsonrpc\":\"2.0\",\"method\":\"stream.error\",\"params\":{{\"error\":\"{}\"}}}}",
+                                    error.replace('\\', "\\\\").replace('"', "\\\""))
+                        }
+                        "done" => {
+                            notifications.push("{\"jsonrpc\":\"2.0\",\"method\":\"stream.done\",\"params\":{}}".to_string());
+                            break;
+                        }
+                        _ => continue,
+                    };
+                    notifications.push(notification);
+                }
+            }
+        }
+    }
+
+    Ok(notifications.join("\n"))
 }
 
 // ============================================================================

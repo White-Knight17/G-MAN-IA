@@ -2,6 +2,7 @@
   import ChatView from "$lib/components/ChatView.svelte";
   import OnboardingWizard from "$lib/components/OnboardingWizard.svelte";
   import { createChatStore } from "$lib/stores/chat.svelte";
+  import { listModels } from "$lib/rpc";
 
   // ── Initialization (synchronous, no lifecycle needed) ──────────────────
 
@@ -19,6 +20,24 @@
   let chatStore = $state(createChatStore());
   let onboarded = $state(initialConfig !== null);
   let showWizard = $state(initialConfig === null);
+  let ollamaReady = $state(false);
+
+  // Auto-detect Ollama models on mount (async, non-blocking)
+  (async () => {
+    try {
+      const models = await listModels();
+      if (models.length > 0) {
+        ollamaReady = true;
+        chatStore.addCommandResult(
+          `🦙 Ollama detected — ${models.length} model(s) available:\n` +
+          models.map(m => `  • ${m.name} (${m.size})`).join("\n") +
+          "\n\nType /model to switch, or /models <name> to download more."
+        );
+      }
+    } catch {
+      // Ollama not running or not installed — user will see connection error on first chat
+    }
+  })();
 
   // ── Handlers ───────────────────────────────────────────────────────────
 

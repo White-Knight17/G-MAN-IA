@@ -1,7 +1,7 @@
 // G-MAN v1.0 — Chat Store (Svelte 5 runes)
 // Manages message history, streaming state, and RPC integration
 
-import { streamChat, listModels, getConfig } from "../rpc";
+import { streamChat, listModels, pullModel, getConfig, setConfig } from "../rpc";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -177,12 +177,54 @@ export function createChatStore() {
           await executeModelCommand(args);
           break;
 
+        case "models":
+          if (args.length === 0) {
+            addCommandResult("Usage: /models <name>\nExample: /models qwen2.5:3b", false);
+          } else {
+            await pullModelCommand(args[0]);
+          }
+          break;
+
+        case "api":
+          if (args.length < 2) {
+            addCommandResult("Usage: /api <provider> <key>\nExample: /api openai sk-xxx...", false);
+          } else {
+            await setApiKeyCommand(args[0], args.slice(1).join(" "));
+          }
+          break;
+
         default:
           addCommandResult(`Unknown command: /${cmd}\nType /help for available commands.`, false);
           break;
       }
     } finally {
       isProcessingCommand = false;
+    }
+  }
+
+  async function pullModelCommand(name: string) {
+    addCommandResult(`⬇️ Pulling **${name}** from Ollama...`);
+    try {
+      const result = await pullModel(name);
+      addCommandResult(`✅ **${name}** downloaded successfully.\nRun /model to see available models.`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addCommandResult(`❌ Failed to pull ${name}: ${msg}`, false);
+    }
+  }
+
+  async function setApiKeyCommand(provider: string, key: string) {
+    const validProviders = ["openai", "anthropic", "groq"];
+    if (!validProviders.includes(provider.toLowerCase())) {
+      addCommandResult(`❌ Invalid provider: ${provider}\nValid providers: ${validProviders.join(", ")}`, false);
+      return;
+    }
+    try {
+      await setConfig({ provider: provider.toLowerCase(), api_key: key });
+      addCommandResult(`✅ API key set for **${provider}**.\nG-MAN will use ${provider} for future requests.`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addCommandResult(`❌ Failed to set API key: ${msg}`, false);
     }
   }
 
@@ -217,6 +259,7 @@ export function createChatStore() {
       "/clear — Clear chat history",
       "/model — Show current model and available models",
       "/models <name> — Pull a model from Ollama",
+      "/api <provider> <key> — Set remote API key (openai, anthropic, groq)",
       "",
       "Type a message (without /) to chat with G-MAN.",
     ].join("\n");
@@ -235,5 +278,6 @@ export function createChatStore() {
     sendMessage,
     clearMessages,
     executeCommand,
+    addCommandResult,
   };
 }
