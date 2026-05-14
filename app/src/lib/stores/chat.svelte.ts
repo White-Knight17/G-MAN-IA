@@ -219,8 +219,9 @@ export function createChatStore() {
       return;
     }
     try {
-      await setConfig({ provider: provider.toLowerCase(), api_key: key });
-      addCommandResult(`✅ API key set for **${provider}**.\nRun /model to see current configuration.`);
+      const params: Record<string, string> = { provider: provider.toLowerCase(), api_key: key };
+      await setConfig(params);
+      addCommandResult(`✅ API key set for **${provider}**.\nRun /model to see current configuration.\n\nTip: G-MAN auto-detects base URLs for openai, deepseek, groq.\nUse /config for advanced settings.`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       addCommandResult(`❌ Failed to set API key: ${msg}`, false);
@@ -230,17 +231,29 @@ export function createChatStore() {
   async function executeModelCommand(args: string[]) {
     try {
       const config = await getConfig();
-      let output = `Current model: **${config.model}**\nProvider: ${config.provider}\n\n`;
+      const isLocal = config.provider === "ollama" || !config.provider;
+      let output = `**Provider**: ${config.provider || "ollama"}\n`;
+      output += `**Model**: ${config.model || (isLocal ? "llama3.2:3b" : "gpt-4o")}\n`;
+      output += `**API Key**: ${config.has_api_key ? "🔑 Set" : "❌ Not set"}\n\n`;
 
-      const models = await listModels();
-      if (models.length > 0) {
-        output += "Available models:\n";
-        for (const m of models) {
-          const active = m.name === config.model ? " (active)" : "";
-          output += `  • ${m.name} — ${m.size}${active}\n`;
+      if (isLocal) {
+        try {
+          const models = await listModels();
+          if (models.length > 0) {
+            output += "Local Ollama models:\n";
+            for (const m of models) {
+              const active = m.name === config.model ? " (active)" : "";
+              output += `  • ${m.name} — ${m.size}${active}\n`;
+            }
+          } else {
+            output += "No local models found. Run /models <name> to pull one.";
+          }
+        } catch {
+          output += "⚠️ Ollama not running. Start it with: systemctl --user start ollama";
         }
       } else {
-        output += "No models found. Run /models <name> to pull one.";
+        output += "Using remote API. Supported providers: openai, deepseek, groq\n";
+        output += "Run /api <provider> <key> to switch provider.";
       }
 
       addCommandResult(output);

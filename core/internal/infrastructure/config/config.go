@@ -36,6 +36,7 @@ type Backend struct {
 	Model     string            `json:"model"`
 	OllamaURL string            `json:"ollama_url"`
 	APIKeys   map[string]string `json:"api_keys"`
+	BaseURLs  map[string]string `json:"base_urls"`
 }
 
 // Defaults returns a Config with sensible defaults.
@@ -55,6 +56,7 @@ func Defaults() Config {
 			Model:     "",
 			OllamaURL: "http://localhost:11434",
 			APIKeys:   make(map[string]string),
+			BaseURLs:  make(map[string]string),
 		},
 		Theme:       "dark",
 		Directories: []string{},

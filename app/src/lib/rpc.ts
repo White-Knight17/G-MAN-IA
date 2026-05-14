@@ -51,6 +51,7 @@ export type SetConfigParams = {
   provider?: string;
   ollama_url?: string;
   api_key?: string;
+  base_url?: string;
   window?: { mode?: string; width?: number };
 };
 
