@@ -6,6 +6,10 @@ import path from "path";
 export default defineConfig({
   plugins: [svelte()],
   clearScreen: false,
+  // Disable SSR entirely — this is a Tauri client-only app
+  ssr: {
+    noExternal: true,
+  },
   server: {
     port: 1420,
     strictPort: true,

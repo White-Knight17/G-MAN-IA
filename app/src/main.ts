@@ -1,14 +1,17 @@
-import "./app.css";
-import App from "./App.svelte";
-import { mount } from "svelte";
+// Entry point — only runs in browser context
+// Dynamic imports prevent Vite SSR from evaluating mount()
 
-// Only mount on client — Vite may evaluate this in SSR context during dev
-let app: ReturnType<typeof mount> | undefined;
+async function bootstrap() {
+  // Guard: only run in browser
+  if (typeof window === "undefined") return;
 
-if (!import.meta.env.SSR) {
-  app = mount(App, {
+  const { mount } = await import("svelte");
+  const { default: App } = await import("./App.svelte");
+  await import("./app.css");
+
+  mount(App, {
     target: document.getElementById("app")!,
   });
 }
 
-export default app;
+bootstrap();
