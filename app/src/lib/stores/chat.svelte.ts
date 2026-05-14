@@ -214,14 +214,13 @@ export function createChatStore() {
   }
 
   async function setApiKeyCommand(provider: string, key: string) {
-    const validProviders = ["openai", "anthropic", "groq"];
-    if (!validProviders.includes(provider.toLowerCase())) {
-      addCommandResult(`❌ Invalid provider: ${provider}\nValid providers: ${validProviders.join(", ")}`, false);
+    if (!provider || !key) {
+      addCommandResult(`❌ Usage: /api <provider> <key>\nExample: /api openai sk-xxx...`, false);
       return;
     }
     try {
       await setConfig({ provider: provider.toLowerCase(), api_key: key });
-      addCommandResult(`✅ API key set for **${provider}**.\nG-MAN will use ${provider} for future requests.`);
+      addCommandResult(`✅ API key set for **${provider}**.\nRun /model to see current configuration.`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       addCommandResult(`❌ Failed to set API key: ${msg}`, false);
@@ -259,7 +258,7 @@ export function createChatStore() {
       "/clear — Clear chat history",
       "/model — Show current model and available models",
       "/models <name> — Pull a model from Ollama",
-      "/api <provider> <key> — Set remote API key (openai, anthropic, groq)",
+      "/api <provider> <key> — Set remote API key (openai, deepseek, groq, etc.)",
       "",
       "Type a message (without /) to chat with G-MAN.",
     ].join("\n");
