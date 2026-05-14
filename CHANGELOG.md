@@ -1,5 +1,34 @@
 # Changelog
 
+## v2.1.0 (2026-05-13) — Companion Mode
+
+### 🎉 G-MAN becomes a desktop companion
+
+Three major pillars: always-visible sidebar modes, slash commands, and multi-provider API support (OpenAI, DeepSeek, Groq).
+
+### Added
+- **Companion Mode**: always-on-top sidebar (380px), floating (420×700), compact (48px bar) window modes
+- **Global hotkey**: `Ctrl+Shift+G` to show/hide G-MAN from anywhere
+- **Slash commands**: `/help`, `/clear`, `/model`, `/model <name>`, `/models <name>`, `/api <provider> <key>`
+- **Command palette**: autocomplete popup when typing `/` in chat input
+- **Multi-provider API**: OpenAI-compatible client supporting OpenAI, DeepSeek, Groq, and custom endpoints
+- **Auto-detect models**: correct model set automatically when switching providers (deepseek-v4-pro, gpt-4o, etc.)
+- **Ollama auto-detect**: shows available local models on startup
+- **Settings button**: ⚙ icon in titlebar to re-run the onboarding wizard
+- **Material UI refresh**: CSS elevation tokens (4 levels), 8px spacing grid, typography hierarchy, button transitions
+- **Config persistence**: `~/.config/gman/config.json` with migration from localStorage
+- **Config migration**: automatic localStorage → config.json on first v2.1.0 launch
+- **Provider list**: `provider.list` JSON-RPC endpoint
+
+### Technical
+- **452 tests** (Go 12 packages + Svelte 108 tests) — 0 failures
+- **Go**: new `openai.Client` implementing `domain.Agent` with SSE streaming
+- **Rust**: async Tauri commands (`relay_request`, `stream_chat`) to prevent UI freeze
+- **Svelte 5**: fixed SSR lifecycle issues with `conditions: ["browser"]` in Vite config
+- **Build**: sidecar binary path fix in Makefile
+
+---
+
 ## v2.0.0 (2026-05-08) — Desktop Revolution
 
 ### 💥 BREAKING: TUI → Desktop GUI
