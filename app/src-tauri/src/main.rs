@@ -325,6 +325,7 @@ fn main() {
 // ============================================================================
 
 /// Relays a JSON-RPC request to the Go sidecar and returns the response.
+/// Skips notification lines (no "id" field) until it finds the matching response.
 #[tauri::command]
 fn relay_request_command(
     app: tauri::AppHandle,
@@ -338,7 +339,7 @@ fn relay_request_command(
     let mut guard = state.sidecar.lock().map_err(|e| e.to_string())?;
     let child = guard.as_mut().ok_or("sidecar not running")?;
 
-    let id = 1; // Simple ID — in production use a counter
+    let id = 1;
     let request = serde_json::json!({
         "jsonrpc": "2.0",
         "id": id,
@@ -353,18 +354,30 @@ fn relay_request_command(
     stdin.flush().map_err(|e| e.to_string())?;
     child.stdin = Some(stdin);
 
-    // Read response from stdout
+    // Read from stdout, skipping notifications until we get the response with matching id
     let stdout = child.stdout.as_mut().ok_or("sidecar stdout unavailable")?;
     let mut reader = BufReader::new(stdout);
-    let mut line = String::new();
-    reader.read_line(&mut line).map_err(|e| e.to_string())?;
 
-    let response: serde_json::Value = serde_json::from_str(&line).map_err(|e| e.to_string())?;
-    Ok(response)
+    loop {
+        let mut line = String::new();
+        reader.read_line(&mut line).map_err(|e| e.to_string())?;
+        if line.is_empty() {
+            return Err("sidecar closed connection".to_string());
+        }
+
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&line) {
+            // If it has an "id" field matching our request, it's the response
+            if parsed.get("id").and_then(|v| v.as_u64()) == Some(id as u64) {
+                return Ok(parsed);
+            }
+            // Otherwise it's a notification — skip it
+        }
+    }
 }
 
 /// Opens a streaming chat session with the Go sidecar.
-/// Returns NDJSON lines as a single string (one notification per line).
+/// Reads agent.event notifications until the final response arrives,
+/// then returns all notifications as NDJSON string.
 #[tauri::command]
 fn stream_chat_command(
     app: tauri::AppHandle,
@@ -377,7 +390,6 @@ fn stream_chat_command(
     let mut guard = state.sidecar.lock().map_err(|e| e.to_string())?;
     let child = guard.as_mut().ok_or("sidecar not running")?;
 
-    // Send agent.stream request
     let id = 1;
     let request = serde_json::json!({
         "jsonrpc": "2.0",
@@ -393,7 +405,6 @@ fn stream_chat_command(
     stdin.flush().map_err(|e| e.to_string())?;
     child.stdin = Some(stdin);
 
-    // Read streaming notifications from stdout until stream.done
     let stdout = child.stdout.as_mut().ok_or("sidecar stdout unavailable")?;
     let mut reader = BufReader::new(stdout);
     let mut notifications = Vec::new();
@@ -405,30 +416,37 @@ fn stream_chat_command(
             break;
         }
 
-        // Convert to stream notification format expected by frontend
         if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&line) {
+            // Check if this is the final response (has "id" field)
+            if parsed.get("id").and_then(|v| v.as_u64()) == Some(id as u64) {
+                // Final response — we're done streaming
+                break;
+            }
+
+            // It's a notification — convert agent.event to stream.* format
             if let Some(method) = parsed.get("method").and_then(|m| m.as_str()) {
                 if method == "agent.event" {
                     let params = parsed.get("params").cloned().unwrap_or(serde_json::json!({}));
                     let event_type = params.get("type").and_then(|t| t.as_str()).unwrap_or("unknown");
+
                     let notification = match event_type {
                         "token" => {
                             let token = params.get("content").and_then(|c| c.as_str()).unwrap_or("");
-                            format!("{{\"jsonrpc\":\"2.0\",\"method\":\"stream.token\",\"params\":{{\"token\":\"{}\"}}}}", 
-                                    token.replace('\\', "\\\\").replace('"', "\\\""))
+                            let safe_token = escape_json_string(token);
+                            format!("{{\"jsonrpc\":\"2.0\",\"method\":\"stream.token\",\"params\":{{\"token\":\"{}\"}}}}", safe_token)
                         }
                         "tool_call" => {
-                            format!("{{\"jsonrpc\":\"2.0\",\"method\":\"stream.tool_call\",\"params\":{{\"tool\":\"tool\",\"path\":\"\"}}}}")
+                            "{\"jsonrpc\":\"2.0\",\"method\":\"stream.tool_call\",\"params\":{\"tool\":\"tool\",\"path\":\"\"}}".to_string()
                         }
                         "tool_result" => {
                             let content = params.get("content").and_then(|c| c.as_str()).unwrap_or("");
-                            format!("{{\"jsonrpc\":\"2.0\",\"method\":\"stream.tool_result\",\"params\":{{\"content\":\"{}\"}}}}",
-                                    content.replace('\\', "\\\\").replace('"', "\\\""))
+                            let safe_content = escape_json_string(content);
+                            format!("{{\"jsonrpc\":\"2.0\",\"method\":\"stream.tool_result\",\"params\":{{\"content\":\"{}\"}}}}", safe_content)
                         }
                         "error" => {
                             let error = params.get("error").and_then(|e| e.as_str()).unwrap_or("unknown");
-                            format!("{{\"jsonrpc\":\"2.0\",\"method\":\"stream.error\",\"params\":{{\"error\":\"{}\"}}}}",
-                                    error.replace('\\', "\\\\").replace('"', "\\\""))
+                            let safe_error = escape_json_string(error);
+                            format!("{{\"jsonrpc\":\"2.0\",\"method\":\"stream.error\",\"params\":{{\"error\":\"{}\"}}}}", safe_error)
                         }
                         "done" => {
                             notifications.push("{\"jsonrpc\":\"2.0\",\"method\":\"stream.done\",\"params\":{}}".to_string());
@@ -443,6 +461,15 @@ fn stream_chat_command(
     }
 
     Ok(notifications.join("\n"))
+}
+
+/// Escapes a string for safe inclusion in a JSON string value.
+fn escape_json_string(s: &str) -> String {
+    s.replace('\\', "\\\\")
+     .replace('"', "\\\"")
+     .replace('\n', "\\n")
+     .replace('\r', "\\r")
+     .replace('\t', "\\t")
 }
 
 // ============================================================================
