@@ -113,7 +113,7 @@ pub fn format_jsonrpc_request(method: &str, params: &str) -> String {
 // ============================================================================
 
 /// Writes a JSON-RPC request to sidecar stdin and reads the response from stdout.
-pub fn relay_request(
+pub fn send_jsonrpc(
     stdin: &mut impl Write,
     stdout: &mut impl BufRead,
     request: &str,
@@ -134,7 +134,7 @@ pub fn check_sidecar_health(
     stdout: &mut impl BufRead,
 ) -> std::io::Result<bool> {
     let ping = r#"{"jsonrpc":"2.0","method":"ping","id":0}"#;
-    match relay_request(stdin, stdout, ping) {
+    match send_jsonrpc(stdin, stdout, ping) {
         Ok(response) => Ok(response.contains("\"result\":\"pong\"")),
         Err(_) => Ok(false),
     }
@@ -310,8 +310,8 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            relay_request_command,
-            stream_chat_command,
+            relay_request,
+            stream_chat,
             set_window_mode,
             toggle_window,
             get_window_state,
@@ -327,7 +327,7 @@ fn main() {
 /// Relays a JSON-RPC request to the Go sidecar and returns the response.
 /// Skips notification lines (no "id" field) until it finds the matching response.
 #[tauri::command]
-fn relay_request_command(
+fn relay_request(
     app: tauri::AppHandle,
     method: String,
     params: serde_json::Value,
@@ -379,7 +379,7 @@ fn relay_request_command(
 /// Reads agent.event notifications until the final response arrives,
 /// then returns all notifications as NDJSON string.
 #[tauri::command]
-fn stream_chat_command(
+fn stream_chat(
     app: tauri::AppHandle,
     input: String,
 ) -> Result<String, String> {
@@ -630,7 +630,7 @@ done"#,
 
         let request =
             r#"{"jsonrpc":"2.0","method":"agent.chat","params":{"input":"hello"},"id":1}"#;
-        let response = relay_request(&mut stdin, &mut reader, request).unwrap();
+        let response = send_jsonrpc(&mut stdin, &mut reader, request).unwrap();
 
         assert!(response.contains("\"jsonrpc\":\"2.0\""));
         assert!(response.contains("\"result\""));
@@ -654,7 +654,7 @@ done"#,
         let mut reader = BufReader::new(stdout);
 
         let request = r#"{"jsonrpc":"2.0","method":"ping","id":0}"#;
-        let result = relay_request(&mut stdin, &mut reader, request);
+        let result = send_jsonrpc(&mut stdin, &mut reader, request);
 
         match result {
             Ok(response) => assert!(response.is_empty(), "Expected empty response from dead sidecar"),

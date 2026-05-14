@@ -80,6 +80,9 @@
       <span class="title">G-MAN</span>
     </div>
     <div class="window-controls">
+      <button class="settings-btn" aria-label="Settings" onclick={() => showWizard = true}>
+        ⚙
+      </button>
       <button class="minimize-btn" aria-label="Minimize">─</button>
       <button class="close-btn" aria-label="Close">✕</button>
     </div>
@@ -215,6 +218,11 @@
   .close-btn:hover {
     background: #ef4444 !important;
     color: #fff !important;
+  }
+
+  .settings-btn {
+    font-size: 0.75rem;
+    margin-right: 0.25rem;
   }
 
   .content {
