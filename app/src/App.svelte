@@ -1,51 +1,24 @@
 <script lang="ts">
   import ChatView from "$lib/components/ChatView.svelte";
   import OnboardingWizard from "$lib/components/OnboardingWizard.svelte";
-  import PermissionDialog from "$lib/components/PermissionDialog.svelte";
   import { createChatStore } from "$lib/stores/chat.svelte";
-  import { runMigration } from "$lib/migration";
-  import { setConfig } from "$lib/rpc";
+
+  // ── Initialization (synchronous, no lifecycle needed) ──────────────────
+
+  const initialConfig = localStorage.getItem("gman-config");
+  const initialTheme = initialConfig ? JSON.parse(initialConfig).theme : "dark";
+
+  if (initialTheme === "dark") {
+    document.documentElement.classList.add("theme-dark");
+  } else if (initialTheme === "light") {
+    document.documentElement.classList.add("theme-light");
+  }
 
   // ── State ──────────────────────────────────────────────────────────────
 
   let chatStore = $state(createChatStore());
-  let onboarded = $state(false);
-  let showWizard = $state(false);
-
-  // Check for existing config on mount
-  $effect(() => {
-    const config = localStorage.getItem("gman-config");
-    if (config) {
-      onboarded = true;
-    } else {
-      showWizard = true;
-    }
-  });
-
-  // ── Config Migration (localStorage → config.json) ─────────────────────
-
-  $effect(() => {
-    // Run migration silently on mount
-    runMigration({
-      getItem: (key: string) => localStorage.getItem(key),
-      setItem: (key: string, value: string) => localStorage.setItem(key, value),
-      setConfig: async (params) => {
-        try {
-          return await setConfig(params as any);
-        } catch {
-          // Log but don't crash — migration is best-effort
-          console.warn("[gman] config migration failed:", params);
-          return { ok: false };
-        }
-      },
-    }).then((result) => {
-      if (result.success && result.migrated) {
-        console.log("[gman] config migrated from localStorage to config.json");
-      } else if (!result.success && result.error) {
-        console.warn("[gman] migration error:", result.error);
-      }
-    });
-  });
+  let onboarded = $state(initialConfig !== null);
+  let showWizard = $state(initialConfig === null);
 
   // ── Handlers ───────────────────────────────────────────────────────────
 
@@ -55,12 +28,9 @@
     directories: string[];
     theme: string;
   }) {
-    // Save config to localStorage
     localStorage.setItem("gman-config", JSON.stringify(config));
     showWizard = false;
     onboarded = true;
-
-    // Apply theme
     applyTheme(config.theme);
   }
 
@@ -72,7 +42,6 @@
     } else if (theme === "light") {
       root.classList.add("theme-light");
     }
-    // "system" uses default CSS which respects system preference
   }
 
   async function handleSendMessage(text: string) {
@@ -82,22 +51,6 @@
       // Error already handled by the store
     }
   }
-
-  // Apply saved theme on mount
-  $effect(() => {
-    const config = localStorage.getItem("gman-config");
-    if (config) {
-      try {
-        const parsed = JSON.parse(config);
-        if (parsed.theme) {
-          applyTheme(parsed.theme);
-        }
-      } catch {}
-    } else {
-      // Default dark theme
-      document.documentElement.classList.add("theme-dark");
-    }
-  });
 </script>
 
 <div class="app-shell">
